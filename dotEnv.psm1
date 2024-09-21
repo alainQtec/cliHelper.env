@@ -23,7 +23,9 @@ class dotEnv {
   [System.Security.Cryptography.X509Certificates.X509Certificate2] $Cert
   static hidden [string]$VarName_Suffix = '7fb2e877_6c2b_406a_af40_e1d915c62cdf'
   static [bool] $useDebug = (Get-Variable DebugPreference -ValueOnly) -eq 'Continue'
-  static [ValidateNotNullOrEmpty()][string]$path = (Resolve-Path ./.env -ea Ignore).Path
+  static [ValidateNotNullOrEmpty()][string]$path = [IO.Path]::Combine((Get-Location), ".env")
+  # static hidden [ValidateNotNullOrEmpty()][string]$path_Secure = (Resolve-Path ./.env.secure -ea Ignore).Path
+  dotEnv() {}
   static [void] Log([string]$Message) {
     if ([dotEnv]::useDebug) { Write-Host "🔵 [dotEnv] " -NoNewline; Write-Host $Message -f Cyan }
   }
@@ -186,7 +188,7 @@ class dotEnv {
       throw "Failed to fetch resolver script!"
     }
   }
-  static hidden [string] GetHostOs() {
+  static [string] GetHostOs() {
     return $(if ($(Get-Variable PSVersionTable -Value).PSVersion.Major -le 5 -or $(Get-Variable IsWindows -Value)) { "Windows" }elseif ($(Get-Variable IsLinux -Value)) { "Linux" }elseif ($(Get-Variable IsMacOS -Value)) { "macOS" }else { "UNKNOWN" });
   }
 }
@@ -226,7 +228,7 @@ $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
 
 $Private = Get-ChildItem ([IO.Path]::Combine($PSScriptRoot, 'Private')) -Filter "*.ps1" -ErrorAction SilentlyContinue
 $Public = Get-ChildItem ([IO.Path]::Combine($PSScriptRoot, 'Public')) -Filter "*.ps1" -ErrorAction SilentlyContinue
-foreach ($file in ($Public, $Private)) {
+foreach ($file in ($Public + $Private)) {
   Try {
     if ([string]::IsNullOrWhiteSpace($file.fullname)) { continue }
     . "$($file.fullname)"
