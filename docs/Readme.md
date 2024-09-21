@@ -95,6 +95,12 @@ Remember to follow the contribution guidelines.
 
 </details>
 
-## **GH actions**
+## **CI/CD**
 
 ...
+
+## contribution guidelines
+
+- No long names. ex:
+  `Get-MgEntitlementManagementResourceRequestCatalogResourceScopeResourceRoleResourceEnvironment`
+  from `Microsoft.Graph.Identity.Governance` 2.23.0
