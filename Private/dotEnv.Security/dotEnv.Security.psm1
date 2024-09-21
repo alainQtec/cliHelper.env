@@ -1,4 +1,5 @@
-﻿using namespace System.IO
+﻿#!/usr/bin/env pwsh
+using namespace System.IO
 using namespace System.Drawing
 using namespace System.Security.Cryptography
 using namespace System.Runtime.InteropServices
