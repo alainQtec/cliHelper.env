@@ -1,20 +1,17 @@
 # [dotEnv](dotEnv)
 
-A module for loading and editing `.env` environment variables. + cmdlets for
-extra safety measures.
+A module for reading and editing `.env` values. & has
+[`extra security`](/docs/Readme.md#security-best-practices) cmdlets.
 
-It can securely read and write values in the `.env` file using AES encryption
-modes to store the real values in a hashed credential file.
-
-## Installation
+## install
 
 ```PowerShell
 Install-Module dotEnv
 ```
 
-## Features
+## usage
 
-Make dealing with environment variables easier.
+0-risk editing environment variables
 
 - **Security**:
 
@@ -34,9 +31,6 @@ Make dealing with environment variables easier.
   Cmdlets are benchmarked during tests to make sure they will not slow down the
   system.
 
-## Usage
-
-To use dotEnv, you need to import the module and then call its functions. For
 example:
 
 ```PowerShell
@@ -46,13 +40,13 @@ Import-Module dotEnv
 # sick usage examples go here ...
 ```
 
-## Issues
+## roadmap
 
-- **Compatibility issues**: Environment variables can behave differently on
-  different platforms. For example, Windows and Unix-based systems have
-  different ways of handling environment variables
+- [ ] do stuff.
+- [ ] and ...?
+- [ ] and also do stuff
 
-## **License**
+## license
 
-This module is licensed under the MIT
-[License](https://alainQtec.MIT-license.org).
+This module is licensed under the
+[MIT License](https://alainQtec.MIT-license.org).
