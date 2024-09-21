@@ -1,5 +1,5 @@
 ﻿function Get-Env {
-    <#
+  <#
     .SYNOPSIS
     Gets an Environment Variable.
 
@@ -45,104 +45,102 @@
     .LINK
     Add-Env
     #>
-    [CmdletBinding(DefaultParameterSetName = 'session')]
-    [OutputType([string])]
-    [Alias('Get-Envt')]
-    param(
-        [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'session')]
-        [string]$Name,
+  [CmdletBinding(DefaultParameterSetName = 'session')]
+  [OutputType([string])]
+  param(
+    [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'session')]
+    [ValidateNotNullOrWhiteSpace()]
+    [string]$Name,
 
-        [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'file')]
-        [ValidateNotNullOrEmpty()]
-        [IO.FileInfo]$source,
+    [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'file')]
+    [ValidateNotNullOrEmpty()]
+    [IO.FileInfo]$source,
 
-        [Parameter(Mandatory = $true, Position = 1, ParameterSetName = '__AllparameterSets')]
-        [System.EnvironmentVariableTarget]$Scope,
+    [Parameter(Mandatory = $true, Position = 1, ParameterSetName = '__AllparameterSets')]
+    [System.EnvironmentVariableTarget]$Scope,
 
-        [Parameter(Mandatory = $false, ParameterSetName = '__AllparameterSets')]
-        [switch]$PreserveVariables = $false,
+    [Parameter(Mandatory = $false, ParameterSetName = '__AllparameterSets')]
+    [switch]$PreserveVariables = $false,
 
-        # If specified the cmdlet will only read variables from .env files or other configured sources of env variables.
-        [Parameter(Mandatory = $false, ParameterSetName = 'file')]
-        [switch]$FromFilesOnly = $false
-    )
+    # If specified the cmdlet will only read variables from .env files or other configured sources of env variables.
+    [Parameter(Mandatory = $false, ParameterSetName = 'file')]
+    [switch]$FromFilesOnly = $false
+  )
 
-    DynamicParam {
-        $DynamicParams = [System.Management.Automation.RuntimeDefinedParameterDictionary]::new()
-        #region IgnoredArguments
-        $attributeCollection = [System.Collections.ObjectModel.Collection[System.Attribute]]::new()
-        $attributes = [System.Management.Automation.ParameterAttribute]::new(); $attHash = @{
-            Position                        = 3
-            ParameterSetName                = '__AllParameterSets'
-            Mandatory                       = $False
-            ValueFromPipeline               = $true
-            ValueFromPipelineByPropertyName = $true
-            ValueFromRemainingArguments     = $true
-            HelpMessage                     = 'Allows splatting with arguments that do not apply. Do not use directly.'
-            DontShow                        = $False
-        }; $attHash.Keys | ForEach-Object { $attributes.$_ = $attHash.$_ }
-        $attributeCollection.Add($attributes)
-        # $attributeCollection.Add([System.Management.Automation.ValidateSetAttribute]::new([System.Object[]]$ValidateSetOption))
-        # $attributeCollection.Add([System.Management.Automation.ValidateRangeAttribute]::new([System.Int32[]]$ValidateRange))
-        # $attributeCollection.Add([System.Management.Automation.ValidateNotNullOrEmptyAttribute]::new())
-        # $attributeCollection.Add([System.Management.Automation.AliasAttribute]::new([System.String[]]$Aliases))
-        $RuntimeParam = [System.Management.Automation.RuntimeDefinedParameter]::new("IgnoredArguments", [Object[]], $attributeCollection)
-        $DynamicParams.Add("IgnoredArguments", $RuntimeParam)
-        #endregion IgnoredArguments
-        return $DynamicParams
+  DynamicParam {
+    $DynamicParams = [System.Management.Automation.RuntimeDefinedParameterDictionary]::new()
+    #region IgnoredArguments
+    $attributeCollection = [System.Collections.ObjectModel.Collection[System.Attribute]]::new()
+    $attributes = [System.Management.Automation.ParameterAttribute]::new(); $attHash = @{
+      Position                        = 3
+      ParameterSetName                = '__AllParameterSets'
+      Mandatory                       = $False
+      ValueFromPipeline               = $true
+      ValueFromPipelineByPropertyName = $true
+      ValueFromRemainingArguments     = $true
+      HelpMessage                     = 'Allows splatting with arguments that do not apply. Do not use directly.'
+      DontShow                        = $False
+    }; $attHash.Keys | ForEach-Object { $attributes.$_ = $attHash.$_ }
+    $attributeCollection.Add($attributes)
+    # $attributeCollection.Add([System.Management.Automation.ValidateSetAttribute]::new([System.Object[]]$ValidateSetOption))
+    # $attributeCollection.Add([System.Management.Automation.ValidateRangeAttribute]::new([System.Int32[]]$ValidateRange))
+    # $attributeCollection.Add([System.Management.Automation.ValidateNotNullOrEmptyAttribute]::new())
+    # $attributeCollection.Add([System.Management.Automation.AliasAttribute]::new([System.String[]]$Aliases))
+    $RuntimeParam = [System.Management.Automation.RuntimeDefinedParameter]::new("IgnoredArguments", [Object[]], $attributeCollection)
+    $DynamicParams.Add("IgnoredArguments", $RuntimeParam)
+    #endregion IgnoredArguments
+    return $DynamicParams
+  }
+
+  begin {
+    $PsCmdlet.MyInvocation.BoundParameters.GetEnumerator() | ForEach-Object { New-Variable -Name $_.Key -Value $_.Value -ea 'SilentlyContinue' }
+    $result = $null
+  }
+
+  Process {
+    if ($Name.Contains('*')) {
+      switch ($Scope) {
+        'User' { Get-Item 'HKCU:\Environment' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Property }
+        'Machine' { Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' | Select-Object -ExpandProperty Property }
+        'Process' { Get-ChildItem Env:/ | Select-Object -ExpandProperty Key }
+        default { throw "Unsupported environment scope: $Scope" }
+      }
     }
 
-    begin {
-        $PsCmdlet.MyInvocation.BoundParameters.GetEnumerator() | ForEach-Object { New-Variable -Name $_.Key -Value $_.Value -ea 'SilentlyContinue' }
-        $result = $null
+    [string] $MACHINE_ENVIRONMENT_REGISTRY_KEY_NAME = "SYSTEM\CurrentControlSet\Control\Session Manager\Environment\";
+    [Microsoft.Win32.RegistryKey] $win32RegistryKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($MACHINE_ENVIRONMENT_REGISTRY_KEY_NAME)
+    if ($Scope -eq [System.EnvironmentVariableTarget]::User) {
+      [string] $USER_ENVIRONMENT_REGISTRY_KEY_NAME = "Environment";
+      [Microsoft.Win32.RegistryKey] $win32RegistryKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($USER_ENVIRONMENT_REGISTRY_KEY_NAME)
+    } elseif ($Scope -eq [System.EnvironmentVariableTarget]::Process) {
+      return [Environment]::GetEnvironmentVariable($Name, $Scope)
     }
 
-    Process {
-        if ($Name.Contains('*')) {
-            switch ($Scope) {
-                'User' { Get-Item 'HKCU:\Environment' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Property }
-                'Machine' { Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' | Select-Object -ExpandProperty Property }
-                'Process' { Get-ChildItem Env:\ | Select-Object -ExpandProperty Key }
-                default { throw "Unsupported environment scope: $Scope" }
-            }
-        }
+    [Microsoft.Win32.RegistryValueOptions] $registryValueOptions = [Microsoft.Win32.RegistryValueOptions]::None
 
-        [string] $MACHINE_ENVIRONMENT_REGISTRY_KEY_NAME = "SYSTEM\CurrentControlSet\Control\Session Manager\Environment\";
-        [Microsoft.Win32.RegistryKey] $win32RegistryKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($MACHINE_ENVIRONMENT_REGISTRY_KEY_NAME)
-        if ($Scope -eq [System.EnvironmentVariableTarget]::User) {
-            [string] $USER_ENVIRONMENT_REGISTRY_KEY_NAME = "Environment";
-            [Microsoft.Win32.RegistryKey] $win32RegistryKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($USER_ENVIRONMENT_REGISTRY_KEY_NAME)
-        } elseif ($Scope -eq [System.EnvironmentVariableTarget]::Process) {
-            return [Environment]::GetEnvironmentVariable($Name, $Scope)
-        }
-
-        [Microsoft.Win32.RegistryValueOptions] $registryValueOptions = [Microsoft.Win32.RegistryValueOptions]::None
-
-        if ($PreserveVariables) {
-            Out-Verbose "Choosing not to expand environment names"
-            $registryValueOptions = [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
-        }
-        try {
-            #Out-Verbose "Getting environment variable $Name"
-            if ($null -ne $win32RegistryKey) {
-                # Some versions of Windows do not have HKCU:\Environment
-                $result = $win32RegistryKey.GetValue($Name, [string]::Empty, $registryValueOptions)
-            }
-        } catch {
-            Write-Debug "Unable to retrieve the $Name environment variable. Details: $_"
-        } finally {
-            if ($null -ne $win32RegistryKey) {
-                $win32RegistryKey.Close()
-            }
-        }
-        if ([string]::IsNullOrWhiteSpace(($result -as [string]))) {
-            $result = [Environment]::GetEnvironmentVariable($Name, $Scope)
-        }
+    if ($PreserveVariables) {
+      Out-Verbose "Choosing not to expand environment names"
+      $registryValueOptions = [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
     }
-
-    end {
-        return $result
+    try {
+      #Out-Verbose "Getting environment variable $Name"
+      if ($null -ne $win32RegistryKey) {
+        # Some versions of Windows do not have HKCU:\Environment
+        $result = $win32RegistryKey.GetValue($Name, [string]::Empty, $registryValueOptions)
+      }
+    } catch {
+      Write-Debug "Unable to retrieve the $Name environment variable. Details: $_"
+    } finally {
+      if ($null -ne $win32RegistryKey) {
+        $win32RegistryKey.Close()
+      }
     }
+    if ([string]::IsNullOrWhiteSpace(($result -as [string]))) {
+      $result = [Environment]::GetEnvironmentVariable($Name, $Scope)
+    }
+  }
+
+  end {
+    return $result
+  }
 }
-Set-Alias -Name 'Read-Envt' -Description 'Reads environment Variable(s) from a .env file.' -Value 'Get-Env -FromFilesOnly' -Option AllScope
-Set-Alias -Name 'Read-Env' -Description 'Reads environment Variable(s) from a .env file.' -Value 'Get-Env -FromFilesOnly' -Option AllScope
