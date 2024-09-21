@@ -287,7 +287,7 @@ class AesGCM {
       if ($HostOS -eq "Windows") {
         if ([string]::IsNullOrWhiteSpace($Id)) {
           $machineId = Get-CimInstance -ClassName Win32_ComputerSystemProduct | Select-Object -ExpandProperty UUID
-          Set-Item -Path Env:\MachineId -Value $([convert]::ToBase64String($sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($machineId))));
+          Set-Item -Path Env:/MachineId -Value $([convert]::ToBase64String($sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($machineId))));
         }
         $Id = [string]($Env:MachineId)
       } elseif ($HostOS -eq "Linux") {
