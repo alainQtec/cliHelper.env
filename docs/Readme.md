@@ -43,7 +43,7 @@ without facing compatibility issues:
   environments such as Heroku, AWS, Netlify, etc., provide a space for users to
   upload secrets which are later injected into the runtime of your application.
 
-### How to test Locally
+## **Testing locally**
 
 When you want to test stuff before pushing to remote.
 
@@ -94,3 +94,7 @@ request.
 Remember to follow the contribution guidelines.
 
 </details>
+
+## **GH actions**
+
+...
