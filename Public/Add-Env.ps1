@@ -23,10 +23,9 @@ function Add-Env {
   # .LINK
   #     Add-Env
   [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'session')]
-  [Alias('Add-Envt')]
   param (
-    [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-    [ValidateScript({ return [string]::IsNullOrWhiteSpace($_) } )]
+    [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true, ParameterSetName = 'session')]
+    [ValidateNotNullOrWhiteSpace()]
     [string]$Name,
 
     [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'file')]
@@ -225,5 +224,3 @@ function Add-Env {
     $InformationPreference = $Ifp;
   }
 }
-Set-Alias -Name 'Write-Env' -Description 'Write environment Variable(s) to a .env file, but does not set it.' -Value 'Add-Env -ToFilesOnly' -Option AllScope
-Set-Alias -Name 'Set-Env' -Description 'Adds environment Variable(s) to the session in specified scope, even if they were already set.' -Value 'Add-Env -Force' -Option AllScope
