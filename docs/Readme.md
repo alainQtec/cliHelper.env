@@ -1,6 +1,6 @@
 # Docs
 
-... Using Environment variables can be cost you if you're not diligent.
+... Using Environment variables can cost you if you're not diligent.
 
 ## **Security best practices**
 
