@@ -4,17 +4,18 @@ using namespace System.Drawing
 using namespace System.Security.Cryptography
 using namespace System.Runtime.InteropServices
 
-enum EncryptionScope {
-  User    # The encrypted data can be decrypted with the same user on any machine.
-  Machine # The encrypted data can only be decrypted with the same user on the same machine it was encrypted on.
-}
-
 enum Compression {
   Gzip
   Deflate
   ZLib
   # Zstd # Todo: Add Zstandard. (The one from facebook. or maybe zstd-sharp idk. I just can't find a way to make it work in powershell! no dll nothing!)
 }
+
+enum EncryptionScope {
+  User    # The encrypted data can be decrypted with the same user on any machine.
+  Machine # The encrypted data can only be decrypted with the same user on the same machine it was encrypted on.
+}
+
 #region    Shuffl3r
 # .DESCRIPTION
 #     Shuffles bytes, nonce, and other info into a jumbled mess that can be split using a password.
