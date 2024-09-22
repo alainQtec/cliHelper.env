@@ -7,23 +7,26 @@
   param (
     [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'kv')]
     [ValidateNotNullOrWhiteSpace()]
+    [string]$Path,
+
+    [Parameter(Mandatory = $true, Position = 1, ParameterSetName = 'kv')]
+    [ValidateNotNullOrWhiteSpace()]
     [string]$Name,
 
     [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'entries')]
     [dotEntry[]]$Entries,
 
-    [Parameter(Mandatory = $true, Position = 2, ParameterSetName = 'kv')]
-    [string]$Value,
-    [Parameter(Mandatory = $true, Position = 1, ParameterSetName = '__AllparameterSets')]
-    [ValidateNotNullOrWhiteSpace()]
-    [string]$Path
+
+    [Parameter(Mandatory = $true, Position = 2, ParameterSetName = '__AllparameterSets')]
+    [string]$Value
   )
 
   end {
     if ($PSCmdlet.ParameterSetName -eq "kv") {
-      return [dotEnv]::Update($Path, $Name, $Value)
+      [dotEnv]::Update($Path, $Name, $Value)
     } else {
-      return [dotEnv]::Update($Entries, $Name, $Value)
+      $c = [dotEnv]::Update($Entries, $Name, $Value)
+      [IO.File]::WriteAllText($Path, ($c.ForEach({ $_.ToString() }) | Out-String).Trim(), [System.Text.Encoding]::UTF8)
     }
   }
 }
