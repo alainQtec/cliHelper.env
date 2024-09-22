@@ -23,6 +23,7 @@ function Add-Env {
   # .LINK
   #     Add-Env
   [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'session')]
+  [Alias('Set-Env')]
   param (
     [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true, ParameterSetName = 'session')]
     [ValidateNotNullOrWhiteSpace()]
@@ -40,37 +41,10 @@ function Add-Env {
     [ValidateNotNullOrEmpty()]
     [System.EnvironmentVariableTarget]$Scope,
 
-    # If specified the cmdlet will only Write environment Variable(s) to a .env file.
-    [Parameter(Mandatory = $false, ParameterSetName = 'file')]
-    [switch]$ToFilesOnly,
-
-    [Parameter(Mandatory = $false, ParameterSetName = '__AllparameterSets')]
-    [switch]$Force
+    [Parameter(Mandatory = $true, Position = 3, ParameterSetName = '__AllParameterSets')]
+    [ValidateNotNullOrWhiteSpace()]
+    [string]$OutFile
   )
-  DynamicParam {
-    $DynamicParams = [System.Management.Automation.RuntimeDefinedParameterDictionary]::new()
-    #region IgnoredArguments
-    $attributeCollection = [System.Collections.ObjectModel.Collection[System.Attribute]]::new()
-    $attributes = [System.Management.Automation.ParameterAttribute]::new(); $attHash = @{
-      Position                        = 4
-      ParameterSetName                = '__AllParameterSets'
-      Mandatory                       = $False
-      ValueFromPipeline               = $true
-      ValueFromPipelineByPropertyName = $true
-      ValueFromRemainingArguments     = $true
-      HelpMessage                     = 'Allows splatting with arguments that do not apply. Do not use directly.'
-      DontShow                        = $False
-    }; $attHash.Keys | ForEach-Object { $attributes.$_ = $attHash.$_ }
-    $attributeCollection.Add($attributes)
-    # $attributeCollection.Add([System.Management.Automation.ValidateSetAttribute]::new([System.Object[]]$ValidateSetOption))
-    # $attributeCollection.Add([System.Management.Automation.ValidateRangeAttribute]::new([System.Int32[]]$ValidateRange))
-    # $attributeCollection.Add([System.Management.Automation.ValidateNotNullOrEmptyAttribute]::new())
-    # $attributeCollection.Add([System.Management.Automation.AliasAttribute]::new([System.String[]]$Aliases))
-    $RuntimeParam = [System.Management.Automation.RuntimeDefinedParameter]::new("IgnoredArguments", [Object[]], $attributeCollection)
-    $DynamicParams.Add("IgnoredArguments", $RuntimeParam)
-    #endregion IgnoredArguments
-    return $DynamicParams
-  }
 
   begin {
     [System.Management.Automation.ActionPreference]$eap = $ErrorActionPreference; $ErrorActionPreference = "SilentlyContinue"
@@ -216,6 +190,9 @@ function Add-Env {
       & "$setx"EnvLastPathUpdate `"$((Get-Date).ToFileTime())`" | Out-Null
     }
     Write-Debug "$fxn 🤖 Updated `$env:EnvLastPathUpdate"
+    if ($OutFile) {
+      [dotEnv]::Update($OutFile, $Name, $Value)
+    }
   }
 
   end {
