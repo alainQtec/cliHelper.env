@@ -13,14 +13,6 @@ enum dtActn {
 }
 
 #region classes
-class dotEntry {
-  [string]$Name
-  [string]$Value
-  hidden [dtActn]$Action
-  dotEntry($n, $v, $a) {
-    $this.Name = $n; $this.Action = $a; $this.Value = $v
-  }
-}
 class CfgList {
   CfgList() {
     $this.PsObject.properties.add([psscriptproperty]::new('Count', [scriptblock]::Create({ ($this | Get-Member -Type *Property).count - 2 })))
@@ -125,7 +117,24 @@ class CfgList {
     return $s
   }
 }
-class EnvCfg : CfgList {
+
+class dotEntry {
+  [ValidateNotNullOrWhiteSpace()][string]$Name
+  [string]$Value
+  hidden [dtActn]$Action
+  dotEntry($n, $v, $a) {
+    $this.Name = $n; $this.Action = $a; $this.Value = $v
+  }
+  [void] Set([string]$Name, [string]$value) {
+    $this.Name = $Name; $this.Value = $value
+  }
+  [string] ToString() {
+    $__str = '{0}{1}{2}' -f $this.Name, @{ Assign = '='; Prefix = ":="; Suffix = "=:" }["$($this.Action)"], $this.Value
+    return $__str
+  }
+}
+
+class EnvCfg {
   [ValidateNotNullOrEmpty()][string]$AzureServicePrincipalAppName
   [ValidateRange(1, 73000)][int]$CertExpirationDays
   [IO.FileInfo]$PrivateCertFile
