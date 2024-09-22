@@ -28,7 +28,7 @@ class dotEnv : EnvTools {
     foreach ($line in $content) {
       if ([string]::IsNullOrWhiteSpace($line)) { continue }
       if ($line.StartsWith("#") -or $line.StartsWith("//")) {
-        [dotEnv]::Log("Skipping comment: $line");
+        [dotEnv]::Log("~ comment: $([dotEnv]::sensor($line))");
         continue
       }
       ($m, $d ) = switch -Wildcard ($line) {
@@ -43,21 +43,33 @@ class dotEnv : EnvTools {
     }
     return $res_Obj
   }
-  static [void] Update([string]$EnvFile, [string]$Key, [string]$Value) {
-    $content = [dotenv]::Read($EnvFile);
-    $q = $content.Where({ $_.Name -eq $Key }); $s = ''
-    $sb = [System.Text.StringBuilder]::new([IO.File]::ReadAllText($EnvFile));
-    $ms = [PSObject]@{ Assign = '='; Prefix = ":="; Suffix = "=:" };
-    if ($q.count -ne 0) {
-      $s = $ms[$q.Action]
-      $pa = "(?m)^($key{0}).*$" -f $s; $re = "$key{0}$value" -f $s
-      $updatedContent = $sb.ToString() -replace $pa, $re
-      [IO.File]::WriteAllText($EnvFile, $updatedContent)
+  static [void] Update([IO.File]$EnvFile, [string]$Name, [string]$Value) {
+    [dotEnv]::Update($EnvFile, $Name, $Value, $false)
+  }
+  static [void] Update([IO.File]$EnvFile, [string]$Name, [string]$Value, [bool]$stripComments) {
+    $Entries = [dotenv]::Read($EnvFile.FullName);
+    if ($stripComments) {
+      [IO.File]::WriteAllText($EnvFile,
+        $([dotEnv]::Update($Entries, $Name, $Value).ForEach({ $_.ToString() }) | Out-String).Trim(),
+        [System.Text.Encoding]::UTF8
+      )
     } else {
-      throw [System.Exception]::new("key: $Key not found.")
+      $q = $Entries.Where({ $_.Name -eq $Name }); $s = ''
+      $sb = [System.Text.StringBuilder]::new([IO.File]::ReadAllText($EnvFile.FullName));
+      $ms = [PSObject]@{ Assign = '='; Prefix = ":="; Suffix = "=:" };
+      if ($q.count -ne 0) {
+        $s = $ms[$q.Action]
+        $pa = "(?m)^($Name{0}).*$" -f $s; $re = "$Name{0}$value" -f $s
+        $updatedContent = $sb.ToString() -replace $pa, $re
+        [IO.File]::WriteAllText($EnvFile.FullName, $updatedContent)
+      } else {
+        throw [System.Exception]::new("key: $Name not found.")
+      }
     }
   }
-
+  static hidden [dotEntry[]] Update([dotEntry[]]$Entries, [string]$Name, [string]$Value) {
+    return $Entries.ForEach({ if ($_.Name -eq $Name) { $_.Set($Name, $Value) } })
+  }
   static [void] Set([string]$EnvFile) {
     [dotEnv]::Set([dotEnv]::Read($EnvFile))
   }
@@ -80,6 +92,25 @@ class dotEnv : EnvTools {
         }
       }
     }
+  }
+  static [void] stripComments([string]$EnvFile) {
+    [dotEnv]::stripComments($EnvFile, [System.Text.Encoding]::UTF8)
+  }
+  static [void] stripComments([string]$EnvFile, [System.Text.Encoding]$Encoding) {
+    [ValidateNotNullOrEmpty()][string]$EnvFile = $EnvFile = $(Resolve-Path $EnvFile -ea Ignore).Path
+    [string]$content = ([dotenv]::Read($EnvFile).ForEach({ $_.ToString() }) | Out-String).Trim()
+    [IO.File]::WriteAllText($EnvFile, $content, $Encoding)
+  }
+  static [string] sensor([string]$str) {
+    if ([string]::IsNullOrWhiteSpace($str)) { return $str }
+    $_90 = [int][Math]::Floor($str.Length * .9)
+    $_10 = [int][Math]::Floor($str.Length * .1)
+    $_sr = ($str.Substring(0, $_10) + '░' * $_90)
+    $_cs = "CENSORED"; if ($_sr.Length -gt 13) {
+      $50l = [int][Math]::Floor($_sr.Length * .5)
+      $_sr = $_sr.Substring(0, $50l - $_cs.Length) + $_cs + $_sr.Substring($50l + $_cs.Length)
+    }
+    return $_sr
   }
 }
 
