@@ -2,7 +2,7 @@ function Add-Env {
   # .DESCRIPTION
   #     Saves an environment variable.
   # .EXAMPLE
-  #     Set-Env -Name 'testvar' -Value '009'
+  #     Read-Env | Set-Env
   # .EXAMPLE
   #     Add-Env -Name 'path' -scope 'Machine' -value $rscriptPath
   # .NOTES
@@ -15,6 +15,10 @@ function Add-Env {
   [OutputType([void])]
   [Alias('Set-Env')]
   param (
+    [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true, ParameterSetName = 'en')]
+    [AllowNull()]
+    [dotEntry[]]$Entries,
+
     [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'session')]
     [ValidateNotNullOrWhiteSpace()]
     [string]$Name,
@@ -46,20 +50,42 @@ function Add-Env {
   }
 
   process {
-    if ($PSCmdlet.ParameterSetName -eq "fromfile") {
-      [dotEnv]::Read($source.FullName).ForEach({
-          if ($PSCmdlet.ShouldProcess("$Name@$Scope", "SetEnvironmentVariable")) {
-            [dotEnv]::SetEnvironmentVariable($_.Name, $_.Value, $Scope)
+    switch ($PSCmdlet.ParameterSetName) {
+      "fromfile" {
+        [dotEnv]::Read($source.FullName).ForEach({
+            if ($PSCmdlet.ShouldProcess("$($_.Name)@$Scope", "SetEnvironmentVariable")) {
+              [dotEnv]::SetEnvironmentVariable($_.Name, $_.Value, $Scope)
+              if ($OutFile) {
+                [dotEnv]::Update($OutFile, $_.Name, $_.Value)
+              }
+            }
+          }
+        )
+        break
+      }
+      "session" {
+        if ($PSCmdlet.ShouldProcess("$Name@$Scope", "SetEnvironmentVariable")) {
+          [dotEnv]::SetEnvironmentVariable($Name, $Value, $Scope)
+          if ($OutFile) {
+            [dotEnv]::Update($OutFile, $Name, $Value)
           }
         }
-      )
-    } else {
-      if ($PSCmdlet.ShouldProcess("$Name@$Scope", "SetEnvironmentVariable")) {
-        [dotEnv]::SetEnvironmentVariable($Name, $Value, $Scope)
+        break
       }
-    }
-    if ($OutFile) {
-      [dotEnv]::Update($OutFile, $Name, $Value)
+      "en" {
+        $Entries.ForEach({
+            if ($PSCmdlet.ShouldProcess("$($_.Name)@$($Scope)", "SetEnvironmentVariable")) {
+              [dotEnv]::SetEnvironmentVariable($_.Name, $_.Value, $Scope)
+              if ($OutFile) {
+                [dotEnv]::Update($OutFile, $_.Name, $_.Value)
+              }
+            }
+          }
+        )
+      }
+      Default {
+        $PSCmdlet.ThrowTerminatingError("Could not resolve parameterSet")
+      }
     }
   }
 
