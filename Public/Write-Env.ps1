@@ -5,11 +5,11 @@
   #   Write environment Variable(s) to a .env file, but does not set it.
   [CmdletBinding(DefaultParameterSetName = "path")]
   param (
-    [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'kv')]
+    [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'keyvalue')]
     [ValidateNotNullOrWhiteSpace()]
     [string]$Path,
 
-    [Parameter(Mandatory = $true, Position = 1, ParameterSetName = 'kv')]
+    [Parameter(Mandatory = $true, Position = 1, ParameterSetName = 'keyvalue')]
     [ValidateNotNullOrWhiteSpace()]
     [string]$Name,
 
@@ -22,7 +22,7 @@
   )
 
   end {
-    if ($PSCmdlet.ParameterSetName -eq "kv") {
+    if ($PSCmdlet.ParameterSetName -eq "keyvalue") {
       [dotEnv]::Update($Path, $Name, $Value)
     } else {
       $c = [dotEnv]::Update($Entries, $Name, $Value)
