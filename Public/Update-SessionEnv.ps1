@@ -1,5 +1,4 @@
 function Update-SessionEnv {
-
   # .SYNOPSIS
   #   A method to refresh session environment variables without having to reboot, restart the terminal or restart Explorer.exe
   # .DESCRIPTION
@@ -20,8 +19,6 @@ function Update-SessionEnv {
   # .NOTES
   #   This function was written specifically for Windows; it does not throw errors on other platforms, but it is not required.
   # .EXAMPLE
-  #   # Load the latest script
-  #   . ([scriptblock]::Create((Invoke-RestMethod -Verbose:$false -Method Get https://api.github.com/gists/8b4ddc0302a9262cf7fc25e919227a2f).files.'Update_Session_Env.ps1'.content))
   #   Update-SessionEnv
   # .LINK
   #   https://github.com/alainQtec/dotEnv/public/Update-SessionEnv.ps1
