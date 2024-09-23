@@ -5,6 +5,8 @@
   #   https://github.com/alainQtec/dotEnv/Public/Read-Env.ps1
   # .EXAMPLE
   #   Read-Env ./.env
+  # .EXAMPLE
+  #   Read-Env | Set-Env
   [CmdletBinding(DefaultParameterSetName = "path")]
   param (
     [Parameter(Mandatory = $false, Position = 0, ParameterSetName = 'path')]
