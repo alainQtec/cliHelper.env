@@ -40,11 +40,14 @@ Import-Module dotEnv
 # sick usage examples go here ...
 ```
 
-## roadmap
+## TODOs
 
-- [ ] do stuff.
-- [ ] and ...?
-- [ ] and also do stuff
+- [ ] Complete Protect-Env & UnProtect-Env
+- [ ] Update build script
+- [ ] Add fancy cli. ex animations, progressbar & logging
+- [ ] Add tests
+- [ ] Add zstandard compression
+- [ ] complete the docs
 
 ## license
 
