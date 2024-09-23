@@ -112,6 +112,9 @@ class dotEnv : EnvTools {
     }
     return $_sr
   }
+  static [IO.FileInfo] FindEnvFile() {
+    return (Get-ChildItem $pwd/.env* -Force | Select-Object -First 1)
+  }
 }
 
 #endregion Classes
