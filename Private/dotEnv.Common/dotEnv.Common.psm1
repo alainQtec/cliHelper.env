@@ -199,9 +199,9 @@ class vars {
   hidden [ValidateNotNullOrEmpty()][char]$p = [IO.Path]::PathSeparator
   static [ValidateNotNullOrEmpty()][string[]]$targets = [Enum]::GetNames([EnvironmentVariableTarget])
   vars() {
-    $this.PsObject.properties.add([psscriptproperty]::new('Process', { return [Environment]::GetEnvironmentVariables('Process') }))
-    $this.PsObject.properties.add([psscriptproperty]::new('Machine', { return [Environment]::GetEnvironmentVariables('Machine') }))
-    $this.PsObject.properties.add([psscriptproperty]::new('User', { return [Environment]::GetEnvironmentVariables('User') }))
+    $this.PsObject.properties.add([psscriptproperty]::new('Process', { $o = [Environment]::GetEnvironmentVariables('Process'); return  $o.keys.ForEach({ [dotEntry]::new($_, $o["$_"], "ASSIGN") }) }))
+    $this.PsObject.properties.add([psscriptproperty]::new('Machine', { $o = [Environment]::GetEnvironmentVariables('Machine'); return  $o.keys.ForEach({ [dotEntry]::new($_, $o["$_"], "ASSIGN") }) }))
+    $this.PsObject.properties.add([psscriptproperty]::new('User', { $o = [Environment]::GetEnvironmentVariables('User'); return  $o.keys.ForEach({ [dotEntry]::new($_, $o["$_"], "ASSIGN") }) }))
   }
   [void] Refresh() {
     [System.Management.Automation.ActionPreference]$DbP2 = $(Get-Variable DebugPreference -ValueOnly);
@@ -295,7 +295,6 @@ class EnvTools {
   static hidden $X509CertHelper
   static hidden [string]$VarName_Suffix = '7fb2e877_6c2b_406a_af40_e1d915c62cdf'
   static [bool] $useDebug = (Get-Variable DebugPreference -ValueOnly) -eq 'Continue'
-  static [bool] $useverbose = (Get-Variable VerbosePreference -ValueOnly) -eq 'Continue'
   [System.Security.Cryptography.X509Certificates.X509Certificate2] $Cert
 
   static [void] refreshEnv() {
@@ -303,17 +302,8 @@ class EnvTools {
   }
   static [void] refreshEnv([ctxOption]$ctxOption) {
     try {
-      $hostOS = [EnvTools]::GetHostOs(); $IsWinEnv = $hostOS -eq "Windows"; [bool]$IsAdmin = $false
-      if ($hostOS -eq "Windows") {
-        Write-Warning "   : [!]  This function only works on windows [!] "
-        [bool]$IsAdmin = $((New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator));
-      } elseif ($hostOS -eq "Linux") {
-        [bool]$IsAdmin = (& id -u) -eq 0
-      } elseif ($hostOS -eq "MacOsx") {
-        # TODO: add implementation
-        Write-Warning "MacOsx !! idk how to solve this one!"
-      }
-      if ($hostOS -eq "Windows" -and !$IsAdmin) {
+      $hostOS = [EnvTools]::GetHostOs(); $IsWinEnv = $hostOS -eq "Windows";
+      if ($hostOS -eq "Windows" -and ![EnvTools]::IsAdmin()) {
         Write-Warning "   : [!]  It seems You're not Admin [!] "
         return
       }
@@ -348,6 +338,57 @@ class EnvTools {
         }
       }
     }
+  }
+  static [void] SetEnvironmentVariable([string]$Name, [string]$Value, [System.EnvironmentVariableTarget]$Scope) {
+    if ($Name.ToUpper().Equals("PATH") -and [EnvTools]::GetHostOs() -eq "Windows") {
+      $hive_is_connected = $false
+      ([Microsoft.Win32.RegistryKey]$win32RegistryKey, [string]$registryKey) = switch ($Scope) {
+        "Machine" {
+          $dkey = "HKLM\DEFAULT"; $ntFl = "C:\Users\Default\NTUSER.DAT"
+          if (!(Test-Path $dkey.Replace("\", ":"))) {
+            Write-Verbose "Loading file $ntFl to the reg Key $dkey"
+            $r = reg load $dkey $ntFl *>&1
+            if (!$?) { throw "Failed to load hive: $r" }
+          }; $hive_is_connected = $true; $k = 'DEFAULT\Environment'
+          [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($k), $k
+          break;
+        }
+        "User" {
+          $k = 'Environment'
+          [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($k), $k; break;
+        }
+        Default {
+          $k = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment\'
+          [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($k), $k
+        }
+      }
+      # "Write ACCESS CHECKING"..
+      if ($null -eq $win32RegistryKey.OpenSubKey($registryKey, [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree)) {
+        Write-Warning "[!]  No RegistryKeyReadWrite Permission."
+      }
+      try {
+        $registryType = switch ($true) {
+          $win32RegistryKey.GetValueNames().Contains($Name) { $win32RegistryKey.GetValueKind($Name); break }
+          $Name.ToUpper().Equals("PATH") { [Microsoft.Win32.RegistryValueKind]::ExpandString; break }
+          Default { [Microsoft.Win32.RegistryValueKind]::String }
+        }
+      } catch {
+        throw "Error. Could not find reg type for $Name`n" + $_
+      }
+      $CurrentPath = & {
+        # idk, probably scope issues
+        try { [System.Environment]::GetEnvironmentVariable('PATH', "$Scope") } catch { $win32RegistryKey.GetValue('PATH', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames).TrimEnd([System.IO.Path]::PathSeparator) }
+      }
+      $NewPathValue = if (($null -eq $Value) -or ($Value -eq '')) { $CurrentPath }else { [string]::Concat($value, [System.IO.Path]::PathSeparator, $CurrentPath) }
+      if ($NewPathValue.Contains('%')) { $registryType = [Microsoft.Win32.RegistryValueKind]::ExpandString }
+      [void]$win32RegistryKey.SetValue('PATH', $NewPathValue, $registryType)
+      $win32RegistryKey.Handle.Close()
+      Write-Verbose "✅ Added PATH:Variable `"$Value`"."
+      if ($hive_is_connected) { if ($PSCmdlet.ShouldProcess('HKLM\DEFAULT', 'reg unload')) { $r = reg unload "HKLM\DEFAULT" *>&1 } }
+      return
+    }
+    [System.Environment]::SetEnvironmentVariable($Name, $Value, $Scope);
+    if ([Bool][System.Environment]::GetEnvironmentVariable("$Name", $Scope)) { Write-Verbose "✅ Added env:variable `"$Name`"." }
   }
   static [void] CreateObjectsRefreshScript() {
     $TempFile = $null;
@@ -447,10 +488,22 @@ class EnvTools {
     }
   }
   static [void] Log([string]$Message) {
-    if ([EnvTools]::useverbose) { Write-Host "🔵 [dotEnv] " -NoNewline; Write-Host $Message -f Cyan }
+    if ((Get-Variable VerbosePreference -ValueOnly) -eq 'Continue') { Write-Host "🔵 [dotEnv] " -NoNewline; Write-Host $Message -f Cyan }
   }
   static [string] GetHostOs() {
     return $(if ($(Get-Variable PSVersionTable -Value).PSVersion.Major -le 5 -or $(Get-Variable IsWindows -Value)) { "Windows" }elseif ($(Get-Variable IsLinux -Value)) { "Linux" }elseif ($(Get-Variable IsMacOS -Value)) { "macOS" }else { "UNKNOWN" });
+  }
+  static [bool] IsAdmin() {
+    $hostOs = [EnvTools]::GetHostOs()
+    $isAdmn = switch ($hostOS) {
+      "Windows" { (New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator); break }
+      "Linux" { (& id -u) -eq 0; break }
+      "MacOsx" { Write-Warning "MacOsx !! idk how to solve this one!"; $false; break }
+      Default {
+        throw "UNSUPPORTED_OS"
+      }
+    }
+    return $isAdmn
   }
 }
 
@@ -474,12 +527,7 @@ function Set-dotEnvConfig {
   #     Explanation of the function or its result. You can include multiple examples with additional .EXAMPLE lines
   [CmdletBinding(SupportsShouldProcess = $true)]
   [Alias("Initialize-dotEnv")]
-  param (
-
-  )
-
-  begin {
-  }
+  param ()
 
   process {
     if ($PSCmdlet.ShouldProcess("Localhost", "Initialize dotEnv")) {
