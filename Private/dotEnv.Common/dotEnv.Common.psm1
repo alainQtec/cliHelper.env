@@ -62,6 +62,9 @@ class CfgList {
   [void] Set([System.Collections.Specialized.OrderedDictionary]$dict) {
     $dict.Keys.Foreach({ $this.Set($_, $dict["$_"]) });
   }
+  [void] Remove([string[]]$keys) {
+    $keys.ForEach({ $this.PsObject.Properties.Remove($_) })
+  }
   [void] LoadJson([string]$FilePath) {
     $this.LoadJson($FilePath, [System.Text.Encoding]::UTF8)
   }
@@ -134,21 +137,21 @@ class dotEntry {
   }
 }
 
-class EnvCfg {
+class EnvCfg : CfgList {
   [ValidateNotNullOrEmpty()][string]$AzureServicePrincipalAppName
   [ValidateRange(1, 73000)][int]$CertExpirationDays
   [IO.FileInfo]$PrivateCertFile
   [IO.FileInfo]$PublicCertFile
   [bool]$KeepLocalPfxFiles
+  [IO.FileInfo]$EnvFile
   [IO.FileInfo]$PfxFile
 
   EnvCfg() {
-    $env = [System.IO.FileInfo]::New([IO.Path]::Combine($(Get-Variable executionContext -ValueOnly).SessionState.Path.CurrentLocation.Path, '.env'))
-    if ($env.Exists) { $this.Set($env.FullName) }; $this.SetCertPath();
+    $this.SetEnvPath(); $this.SetCertPath();
   }
   hidden [void] Set([string]$key, $value) {
     [ValidateNotNullOrEmpty()][string]$key = $key
-    [ValidateNotNullOrEmpty()][System.Object]$value = $value
+    [AllowNull()][System.Object]$value = $value
     if ($key.ToLower() -eq 'certpath') {
       $this.SetCertPath($value)
     } elseif ($this.psObject.Properties.Name.Contains([string]$key)) {
@@ -157,25 +160,11 @@ class EnvCfg {
       $this.Add($key, $value)
     }
   }
-  hidden [void] Set([string]$EnvFile) {
-    if (!(Test-Path -Path $EnvFile -PathType Leaf -ErrorAction Ignore)) {
-      throw [System.IO.FileNotFoundException]::New()
-    }
-    $dict = [System.Collections.Specialized.OrderedDictionary]::New(); [IO.File]::ReadAllLines($EnvFile).ForEach({
-        if (![string]::IsNullOrWhiteSpace($_) -and $_[0] -notin ('#', '//')) {
-                        ($m, $d ) = switch -Wildcard ($_) {
-            "*:=*" { "Prefix", ($_ -split ":=", 2); Break }
-            "*=:*" { "Suffix", ($_ -split "=:", 2); Break }
-            "*=*" { "Assign", ($_ -split "=", 2); Break }
-            Default {
-              throw 'Unable to find Key value pair in line'
-            }
-          }
-          [void]$dict.Add($d[0].Trim(), $d[1].Trim())
-        }
-      }
-    )
-    $this.Set($dict);
+  hidden [void] SetEnvPath() {
+    $this.SetEnvPath([IO.Path]::Combine($(Get-Variable executionContext -ValueOnly).SessionState.Path.CurrentLocation.Path, '.env'))
+  }
+  hidden [void] SetEnvPath([string]$path) {
+    $this.EnvFile = (Resolve-Path $path -ErrorAction Ignore).Path -as [IO.FileInfo]
   }
   hidden [void] SetCertPath() {
     $this.SetCertPath($(if ([bool](Get-Variable IsLinux -ValueOnly -ErrorAction Ignore) -or [bool](Get-Variable IsMacOS -ValueOnly -ErrorAction Ignore)) {
@@ -290,7 +279,7 @@ class vars {
 }
 
 class EnvTools {
-  [EnvCfg] $config
+  static [EnvCfg] $config = [EnvCfg]::new()
   static [vars] $vars = [vars]::new()
   static hidden $X509CertHelper
   static hidden [string]$VarName_Suffix = '7fb2e877_6c2b_406a_af40_e1d915c62cdf'
@@ -383,12 +372,12 @@ class EnvTools {
       if ($NewPathValue.Contains('%')) { $registryType = [Microsoft.Win32.RegistryValueKind]::ExpandString }
       [void]$win32RegistryKey.SetValue('PATH', $NewPathValue, $registryType)
       $win32RegistryKey.Handle.Close()
-      Write-Verbose "✅ Added PATH:Variable `"$Value`"."
+      Write-Verbose "Added PATH:Variable `"$Value`"."
       if ($hive_is_connected) { if ($PSCmdlet.ShouldProcess('HKLM\DEFAULT', 'reg unload')) { $r = reg unload "HKLM\DEFAULT" *>&1 } }
       return
     }
     [System.Environment]::SetEnvironmentVariable($Name, $Value, $Scope);
-    if ([Bool][System.Environment]::GetEnvironmentVariable("$Name", $Scope)) { Write-Verbose "✅ Added env:variable `"$Name`"." }
+    if ([Bool][System.Environment]::GetEnvironmentVariable("$Name", $Scope)) { Write-Verbose "Set env:variable `"$Name`"." }
   }
   static [void] CreateObjectsRefreshScript() {
     $TempFile = $null;
