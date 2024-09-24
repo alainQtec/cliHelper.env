@@ -7,10 +7,8 @@ using module Private/dotEnv.Crypto/dotEnv.Crypto.psm1
 #Requires -Version 7
 # .SYNOPSIS
 #  Module main class
-# .EXAMPLE
-#  $value = [dotEnv]::Get("NEXT_PUBLIC_MTN_API_ENVIRONMENT")
 class dotEnv : EnvTools {
-  static [ValidateNotNullOrEmpty()][string]$path = [IO.Path]::Combine((Get-Location), ".env")
+  static [ValidateNotNullOrEmpty()][string]$path = (Set-EnvFile -PassThru).FullName
   static hidden [ValidateNotNullOrEmpty()][string]$path_Secure = [IO.Path]::Combine((Get-Location), ".env.secure")
   dotEnv() {}
 
@@ -100,6 +98,23 @@ class dotEnv : EnvTools {
     [ValidateNotNullOrEmpty()][string]$EnvFile = $EnvFile = $(Resolve-Path $EnvFile -ea Ignore).Path
     [string]$content = ([dotenv]::Read($EnvFile).ForEach({ $_.ToString() }) | Out-String).Trim()
     [IO.File]::WriteAllText($EnvFile, $content, $Encoding)
+  }
+  static [bool] IsPersisted([string]$source) {
+    $p = @(); $p += [dotEnv]::Config.Persisted;
+    return $p.Contains($source)
+  }
+  static [void] Persist([string]$source) {
+    $p = @(); $p += [dotEnv]::Config.Persisted;
+    if (!$p.Contains($source)) {
+      $p += $source; [dotEnv]::Config.Set("Persisted", $p)
+    }
+  }
+  static [void] DePersist([string]$source) {
+    $p = @(); $p += [dotEnv]::Config.Persisted;
+    if (!$p.Contains($source)) {
+      $p = $p.where({ $_ -ne $source })
+      [dotEnv]::Config.Set("Persisted", $p)
+    }
   }
   static [string] sensor([string]$str) {
     if ([string]::IsNullOrWhiteSpace($str)) { return $str }
