@@ -38,19 +38,32 @@
     [ValidateNotNullOrEmpty()]
     [string]$source,
 
-    [Parameter(Mandatory = $false, Position = 1, ParameterSetName = '__AllparameterSets')]
-    [System.EnvironmentVariableTarget]$Scope
+    [Parameter(Mandatory = $false, Position = 1, ParameterSetName = 'session')]
+    [System.EnvironmentVariableTarget]$Scope = 'Process',
+
+    [Parameter(Mandatory = $false, ParameterSetName = 'file')]
+    [switch]$Persist,
+
+    [Parameter(Mandatory = $false, ParameterSetName = '__AllparameterSets')]
+    [switch]$Force
   )
 
   begin {
     $PsCmdlet.MyInvocation.BoundParameters.GetEnumerator() | ForEach-Object { New-Variable -Name $_.Key -Value $_.Value -ea 'SilentlyContinue' }
-    $results = $null
+    if (!$source -and $Force.IsPresent) { $source = (Set-EnvFile -PassThru).FullName }
+    $results = @()
   }
 
   Process {
     $fromFile = $PSCmdlet.ParameterSetName -eq "file"
     $vars = $(if ($fromFile) {
-        [dotEnv]::Read($source)
+        $isp = [dotEnv]::IsPersisted(((Resolve-Path $source -ea Ignore).Path))
+        $inc = [IO.File]::Exists([dotEnv]::Config.fallBack)
+        if (($inc -and !$isp) -or ($isp -and $Force)) {
+          [dotEnv]::Read($source)
+        } else {
+          [dotEnv]::vars.Process
+        }
       } else {
         [dotEnv]::vars
       }
@@ -63,6 +76,15 @@
         }
       )
     }
+    if (!$fromFile -and $Force.IsPresent) {
+      $nvars = [dotEnv]::Read($source)
+      if ($nvars.count -gt 0) {
+        $vars += $nvars; Set-Env -Entries $nvars;
+      }
+    }
+    if ($Persist -and ![dotEnv]::IsPersisted($source)) {
+      Set-Env -Entries $vars; [dotEnv]::Persist($source);
+    }
     $results = $(if ($Name.Contains('*')) {
         $vars.Where({ $_.Name -like $Name })
       } else {
@@ -72,6 +94,16 @@
   }
 
   end {
+    if (!$results -and !$fromFile) {
+      # ie: When not found in scope, so we use (one-time) those from .env file
+      if (![IO.File]::Exists([dotEnv]::Config.fallBack)) {
+        [dotEnv]::Config.Set("fallBack", (Set-EnvFile -PassThru).FullName)
+        $results = Get-Env -Name $Name -Scope $Scope
+      } else {
+        $results = Get-Env -Name $Name -Source ([dotEnv]::Config.fallBack) -Persist
+        [dotEnv]::Config.Remove("fallback")
+      }
+    }
     return $results
   }
 }
