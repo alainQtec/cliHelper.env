@@ -49,7 +49,7 @@
   )
 
   begin {
-    $PsCmdlet.MyInvocation.BoundParameters.GetEnumerator() | ForEach-Object { New-Variable -Name $_.Key -Value $_.Value -ea 'SilentlyContinue' }
+    $PsCmdlet.MyInvocation.BoundParameters.GetEnumerator() | ForEach-Object { Set-Variable -Name $_.Key -Value $_.Value -ea 'SilentlyContinue' }
     if (!$source -and $Force.IsPresent) { $source = (Set-EnvFile -PassThru).FullName }
     $results = @()
   }
