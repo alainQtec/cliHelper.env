@@ -13,6 +13,11 @@ Install-Module dotEnv
 
 0-risk editing environment variables
 
+<!--
+recomended vscode extensions
+temitope1909.dotenv-intellisense
+ -->
+
 - **Security**:
 
   Environment variables can be easily accessed by anyone who has access to the
