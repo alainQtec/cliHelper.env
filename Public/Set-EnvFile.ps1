@@ -6,7 +6,7 @@ function Set-EnvFile {
   [CmdletBinding(SupportsShouldProcess = $true)]
   param (
     [Parameter(Position = 0, Mandatory = $false, ValueFromPipeline = $true)]
-    [string]$Path = "./.env",
+    [string]$Path = (Resolve-FilePath .env),
     [switch]$PassThru
   )
 
