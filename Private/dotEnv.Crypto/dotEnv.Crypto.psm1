@@ -75,7 +75,7 @@ class Shuffl3r {
 
 #region    AesGCM
 # .SYNOPSIS
-#     A custom AesCGM class, with nerdy Options like compression, iterrations, protection ...
+#     A custom AesCGM class, with nerdy Options like compression, iterrations, protection ... WIP
 # .DESCRIPTION
 #     Both AesCng and AesGcm are secure encryption algorithms, but AesGcm is generally considered to be more secure than AesCng in most scenarios.
 #     AesGcm is an authenticated encryption mode that provides both confidentiality and integrity protection. It uses a Galois/Counter Mode (GCM) to encrypt the data, and includes an authentication tag that protects against tampering with or forging the ciphertext.
