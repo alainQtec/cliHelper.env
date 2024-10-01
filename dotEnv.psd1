@@ -6,7 +6,6 @@
 #
 
 @{
-
   # Script module or binary module file associated with this manifest.
   RootModule            = 'dotEnv.psm1'
 
@@ -95,13 +94,13 @@ variables. It also includes cmdlets for extra safety measures.'
     PSData = @{
 
       # Tags applied to this module. These help with module discovery in online galleries.
-      Tags = 'dotEnv', 'PowerShell'
+      Tags       = 'dotEnv', 'PowerShell'
 
       # A URL to the license for this module.
-      # LicenseUri = ''
+      LicenseUri = 'https://alain.mit-license.org/'
 
       # A URL to the main website for this project.
-      # ProjectUri = ''
+      ProjectUri = 'https://github.com/alainQtec/dotEnv'
 
       # A URL to an icon representing this module.
       # IconUri = ''
