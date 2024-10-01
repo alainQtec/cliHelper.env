@@ -1,23 +1,20 @@
 #!/usr/bin/env pwsh
 using namespace System.Management.Automation.Language
-using module Private/dotEnv.Common/dotEnv.Common.psm1
 using module Private/dotEnv.Crypto/dotEnv.Crypto.psm1
+using module Private/dotEnv.Utils/dotEnv.Utils.psm1
 
 #region    Classes
 #Requires -Version 7
 # .SYNOPSIS
 #  Module main class
 class dotEnv : EnvTools {
-  static [ValidateNotNullOrEmpty()][string]$path = (Set-EnvFile -PassThru).FullName
-  static hidden [ValidateNotNullOrEmpty()][string]$path_Secure = [IO.Path]::Combine((Get-Location), ".env.secure")
-  dotEnv() {}
-
+  dotEnv() { [dotEnv]::SetEnvFile() }
   static [string] Get([string]$key) {
     [ValidateNotNullOrEmpty()][string]$key = $key
-    return [dotEnv]::Read([dotEnv]::path).Where({ $_.Name -eq $key }).Value
+    return [dotEnv]::Read([dotEnv].EnvFile).Where({ $_.Name -eq $key }).Value
   }
   static [dotEntry[]] Read([string]$EnvFile) {
-    [ValidateNotNullOrEmpty()][string]$EnvFile = $EnvFile = $(Resolve-Path $EnvFile -ea Ignore).Path
+    [ValidateNotNullOrEmpty()][string]$EnvFile = $(Resolve-Path $EnvFile -ea Ignore).Path
     $res_Obj = @(); $content = [IO.File]::ReadAllLines($EnvFile)
     if ([string]::IsNullOrWhiteSpace($content)) {
       [dotEnv]::Log("The .env file is empty!");
@@ -44,9 +41,9 @@ class dotEnv : EnvTools {
   static [void] Update([IO.File]$EnvFile, [string]$Name, [string]$Value) {
     [dotEnv]::Update($EnvFile, $Name, $Value, $false)
   }
-  static [void] Update([IO.File]$EnvFile, [string]$Name, [string]$Value, [bool]$stripComments) {
+  static [void] Update([IO.File]$EnvFile, [string]$Name, [string]$Value, [bool]$StripComments) {
     $Entries = [dotenv]::Read($EnvFile.FullName);
-    if ($stripComments) {
+    if ($StripComments) {
       [IO.File]::WriteAllText($EnvFile,
         $([dotEnv]::Update($Entries, $Name, $Value).ForEach({ $_.ToString() }) | Out-String).Trim(),
         [System.Text.Encoding]::UTF8
@@ -91,11 +88,11 @@ class dotEnv : EnvTools {
       }
     }
   }
-  static [void] stripComments([string]$EnvFile) {
-    [dotEnv]::stripComments($EnvFile, [System.Text.Encoding]::UTF8)
+  static [void] StripComments([string]$EnvFile) {
+    [dotEnv]::StripComments($EnvFile, [System.Text.Encoding]::UTF8)
   }
-  static [void] stripComments([string]$EnvFile, [System.Text.Encoding]$Encoding) {
-    [ValidateNotNullOrEmpty()][string]$EnvFile = $EnvFile = $(Resolve-Path $EnvFile -ea Ignore).Path
+  static [void] StripComments([string]$EnvFile, [System.Text.Encoding]$Encoding) {
+    [ValidateNotNullOrEmpty()][string]$EnvFile = $(Resolve-Path $EnvFile -ea Ignore).Path
     [string]$content = ([dotenv]::Read($EnvFile).ForEach({ $_.ToString() }) | Out-String).Trim()
     [IO.File]::WriteAllText($EnvFile, $content, $Encoding)
   }
@@ -109,7 +106,7 @@ class dotEnv : EnvTools {
       $p += $source; [dotEnv]::Config.Set("Persisted", $p)
     }
   }
-  static [void] DePersist([string]$source) {
+  static [void] Unpersist([string]$source) {
     $p = @(); $p += [dotEnv]::Config.Persisted;
     if (!$p.Contains($source)) {
       $p = $p.where({ $_ -ne $source })
@@ -127,8 +124,9 @@ class dotEnv : EnvTools {
     }
     return $_sr
   }
-  static [IO.FileInfo] FindEnvFile() {
-    return (Get-ChildItem $pwd/.env* -Force | Select-Object -First 1)
+  static [void] SetEnvFile() {
+    [dotEnv].PsObject.properties.add([psscriptproperty]::new('EnvFile', { return [IO.Path]::Combine($(Get-Variable executionContext -ValueOnly).SessionState.Path.CurrentLocation.Path, '.env') }))
+    [dotEnv].PsObject.properties.add([psscriptproperty]::new('enc_envfile', { return [IO.Path]::Combine($(Get-Variable executionContext -ValueOnly).SessionState.Path.CurrentLocation.Path, '.env.enc') }))
   }
 }
 
