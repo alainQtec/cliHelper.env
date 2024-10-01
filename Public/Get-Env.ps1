@@ -50,7 +50,7 @@
 
   begin {
     $PsCmdlet.MyInvocation.BoundParameters.GetEnumerator() | ForEach-Object { Set-Variable -Name $_.Key -Value $_.Value -ea 'SilentlyContinue' }
-    if (!$source -and $Force.IsPresent) { $source = (Set-EnvFile -PassThru).FullName }
+    if (!$source -and $Force.IsPresent) { $source = (Get-EnvFile).FullName }
     $results = @()
   }
 
@@ -97,7 +97,7 @@
     if (!$results -and !$fromFile) {
       # ie: When not found in scope, so we use (one-time) those from .env file
       if (![IO.File]::Exists([dotEnv]::Config.fallBack)) {
-        [dotEnv]::Config.Set("fallBack", (Set-EnvFile -PassThru).FullName)
+        [dotEnv]::Config.Set("fallBack", (Get-EnvFile).FullName)
         $results = Get-Env -Name $Name -Scope $Scope
       } else {
         $results = Get-Env -Name $Name -Source ([dotEnv]::Config.fallBack) -Persist
