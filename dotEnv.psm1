@@ -135,7 +135,9 @@ class dotEnv : EnvTools {
 #region typeAccelerators
 # Types that will be available to users when they import the module.
 $typestoExport = @(
-  [dotEnv]
+  [dotEnv],
+  [UserConfig],
+  [ProjectConfig]
 )
 $TypeAcceleratorsClass = [psobject].Assembly.GetType('System.Management.Automation.TypeAccelerators')
 foreach ($Type in $typestoExport) {
