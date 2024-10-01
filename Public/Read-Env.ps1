@@ -11,10 +11,10 @@
   param (
     [Parameter(Mandatory = $false, Position = 0, ParameterSetName = 'path')]
     [ValidateNotNullOrEmpty()]
-    [string]$Path = [dotenv]::FindEnvFile().fullname,
+    [string]$Path = [dotenv].EnvFile,
     [Parameter(Mandatory = $false, Position = 0, ParameterSetName = 'file')]
     [ValidateNotNullOrEmpty()]
-    [IO.FileInfo]$File = [dotenv]::FindEnvFile()
+    [IO.FileInfo]$File = [IO.FileInfo][dotenv].EnvFile
   )
   end {
     if ($PSCmdlet.ParameterSetName -eq "path") {
