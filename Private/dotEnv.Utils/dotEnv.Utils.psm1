@@ -13,28 +13,38 @@ enum dtActn {
 }
 
 #region classes
-class CfgList {
-  CfgList() {
-    $this.PsObject.properties.add([psscriptproperty]::new('Count', [scriptblock]::Create({ ($this | Get-Member -Type *Property).count - 2 })))
-    $this.PsObject.properties.add([psscriptproperty]::new('Keys', [scriptblock]::Create({ ($this | Get-Member -Type *Property).Name.Where({ $_ -notin ('Keys', 'Count') }) })))
+class dotEntry {
+  [ValidateNotNullOrWhiteSpace()][string]$Name
+  [string]$Value
+  hidden [dtActn]$Action
+  dotEntry($n, $v, $a) {
+    $this.Name = $n; $this.Action = $a; $this.Value = $v
   }
-  CfgList([hashtable[]]$array) {
-    $this.Add($array)
-    $this.PsObject.properties.add([psscriptproperty]::new('Count', [scriptblock]::Create({ ($this | Get-Member -Type *Property).count - 2 })))
-    $this.PsObject.properties.add([psscriptproperty]::new('Keys', [scriptblock]::Create({ ($this | Get-Member -Type *Property).Name.Where({ $_ -notin ('Keys', 'Count') }) })))
+  [void] Set([string]$Name, [string]$value) {
+    $this.Name = $Name; $this.Value = $value
   }
+  [string] ToString() {
+    $__str = '{0}{1}{2}' -f $this.Name, @{ Assign = '='; Prefix = ":="; Suffix = "=:" }["$($this.Action)"], $this.Value
+    return $__str
+  }
+}
+
+class EnvCfg {
+  [bool]$autoSync = $false
+  EnvCfg() {}
+  EnvCfg([hashtable[]]$items) { $this.Add($items) }
   [void] Add([string]$key, [System.Object]$value) {
     [ValidateNotNullOrEmpty()][string]$key = $key
     if (!$this.Contains($key)) {
       $htab = [hashtable]::new(); $htab.Add($key, $value); $this.Add($htab)
     } else {
-      Write-Warning "CfgList.Add() Skipped $Key. Key already exists."
+      Write-Warning "Cfg.Add() Skipped $Key. Key already exists."
     }
   }
-  [void] Add([hashtable]$table) {
-    [ValidateNotNullOrEmpty()][hashtable]$table = $table
-    $Keys = $table.Keys | Where-Object { !$this.Contains($_) -and ($_.GetType().FullName -eq 'System.String' -or $_.GetType().BaseType.FullName -eq 'System.ValueType') }
-    foreach ($key in $Keys) { $this | Add-Member -MemberType NoteProperty -Name $key -Value $table[$key] }
+  [void] Add([hashtable]$item) {
+    [ValidateNotNullOrEmpty()][hashtable]$item = $item
+    $Keys = $item.Keys | Where-Object { !$this.Contains($_) -and ($_.GetType().FullName -eq 'System.String' -or $_.GetType().BaseType.FullName -eq 'System.ValueType') }
+    foreach ($key in $Keys) { $this | Add-Member -MemberType NoteProperty -Name $key -Value $item[$key] }
   }
   [void] Add([hashtable[]]$items) {
     foreach ($item in $items) { $this.Add($item) }
@@ -42,9 +52,8 @@ class CfgList {
   [void] Add([System.Collections.Generic.List[hashtable]]$items) {
     foreach ($item in $items) { $this.Add($item) }
   }
-  [void] Set([string]$key, [System.Object]$value) {
-    $htab = [hashtable]::new(); $htab.Add($key, $value)
-    $this.Set($htab)
+  [void] Remove([string[]]$keys) {
+    $keys.ForEach({ $this.PsObject.Properties.Remove($_) })
   }
   [void] Set([hashtable]$item) {
     $Keys = $item.Keys | Sort-Object -Unique
@@ -59,22 +68,17 @@ class CfgList {
       }
     }
   }
+  [void] Set([string]$key, [System.Object]$value) {
+    [ValidateNotNullOrEmpty()][string]$key = $key
+    [AllowNull()][System.Object]$value = $value
+    if ($this.psObject.Properties.Name.Contains([string]$key)) {
+      $this."$key" = $value
+    } else {
+      $this.Add($key, $value)
+    }
+  }
   [void] Set([System.Collections.Specialized.OrderedDictionary]$dict) {
     $dict.Keys.Foreach({ $this.Set($_, $dict["$_"]) });
-  }
-  [void] Remove([string[]]$keys) {
-    $keys.ForEach({ $this.PsObject.Properties.Remove($_) })
-  }
-  [void] LoadJson([string]$FilePath) {
-    $this.LoadJson($FilePath, [System.Text.Encoding]::UTF8)
-  }
-  [void] LoadJson([string]$FilePath, [System.Text.Encoding]$Encoding) {
-    [ValidateNotNullOrEmpty()][string]$FilePath = $FilePath
-    [ValidateNotNullOrEmpty()][System.Text.Encoding]$Encoding = $Encoding
-    $ob = ConvertFrom-Json -InputObject $([IO.File]::ReadAllText($FilePath, $Encoding))
-    $ob | Get-Member -Type NoteProperty | Select-Object Name | ForEach-Object {
-      $key = $_.Name; $val = $ob.$key; $this.Set($key, $val);
-    }
   }
   [bool] Contains([string]$Name) {
     [ValidateNotNullOrEmpty()][string]$Name = $Name
@@ -86,15 +90,41 @@ class CfgList {
     $props.name | ForEach-Object { $array += @{ $_ = $this.$_ } }
     return $array
   }
+  [PSCustomObject] ToPsObject() {
+    return ($this.ToJson() | ConvertFrom-Json)
+  }
   [string] ToJson() {
-    return [string]($this | Select-Object -ExcludeProperty count | ConvertTo-Json)
+    return [string]($this | Select-Object * | ConvertTo-Json)
   }
   [System.Collections.Specialized.OrderedDictionary] ToOrdered() {
-    [System.Collections.Specialized.OrderedDictionary]$dict = @{}; $Keys = $this.PsObject.Properties.Where({ $_.Membertype -like "*Property" }).Name
+    $dict = [System.Collections.Specialized.OrderedDictionary]::new(); $Keys = $this.PsObject.Properties.Where({ $_.Membertype -like "*Property" }).Name
     if ($Keys.Count -gt 0) {
       $Keys | ForEach-Object { [void]$dict.Add($_, $this."$_") }
     }
     return $dict
+  }
+  [void] Import([string]$FilePath) {
+    $this.Import($FilePath, [System.Text.Encoding]::UTF8)
+  }
+  [void] Import([string]$FilePath, [System.Text.Encoding]$Encoding) {
+    [ValidateNotNullOrEmpty()][string]$FilePath = $FilePath
+    [ValidateNotNullOrEmpty()][System.Text.Encoding]$Encoding = $Encoding
+    $this.Import($(ConvertFrom-Json -InputObject $([IO.File]::ReadAllText($FilePath, $Encoding))))
+  }
+  [void] Import([PSCustomObject]$Object) {
+    [ValidateNotNullOrEmpty()][PSCustomObject]$Object = $Object
+    $Object | Get-Member -Type NoteProperty | Select-Object Name | ForEach-Object {
+      $key = $_.Name; $val = $Object.$key; if ($null -ne $val) {
+        $t = $this.PsObject.Properties.Where({ $_.Name -eq $key })[0].TypeNameOfValue
+        $this.Set($key, ($val -as $t));
+      }
+    }
+  }
+  [int] GetCount() {
+    return ($this | Get-Member -Type *Property).count
+  }
+  [string[]] GetKeys() {
+    return ($this | Get-Member -Type *Property).Name
   }
   [string] ToString() {
     $r = $this.ToArray(); $s = ''
@@ -121,59 +151,45 @@ class CfgList {
   }
 }
 
-class dotEntry {
-  [ValidateNotNullOrWhiteSpace()][string]$Name
-  [string]$Value
-  hidden [dtActn]$Action
-  dotEntry($n, $v, $a) {
-    $this.Name = $n; $this.Action = $a; $this.Value = $v
-  }
-  [void] Set([string]$Name, [string]$value) {
-    $this.Name = $Name; $this.Value = $value
-  }
+class cert {
+  [string]$Public
+  [string]$Private
+  [string]$KeepLocal = $false
+  [string]$Pfx
+}
+class ProjectConfig : EnvCfg {
+  [string]$Name
+  [string]$publicKey = ""
+  [string]$remoteGistUrl = ""
+  [string[]]$allowedUserIds = @()
   [string] ToString() {
-    $__str = '{0}{1}{2}' -f $this.Name, @{ Assign = '='; Prefix = ":="; Suffix = "=:" }["$($this.Action)"], $this.Value
-    return $__str
+    return ($this | ConvertTo-Json)
   }
 }
 
-class EnvCfg : CfgList {
-  [ValidateNotNullOrEmpty()][string]$AzureServicePrincipalAppName
-  [ValidateRange(1, 73000)][int]$CertExpirationDays
-  [IO.FileInfo]$PrivateCertFile
-  [IO.FileInfo]$PublicCertFile
-  [bool]$KeepLocalPfxFiles
-  [IO.FileInfo]$PfxFile
-
-  EnvCfg() {
-    $this.SetCertPath();
-  }
-  hidden [void] Set([string]$key, $value) {
-    [ValidateNotNullOrEmpty()][string]$key = $key
-    [AllowNull()][System.Object]$value = $value
-    if ($key.ToLower() -eq 'certpath') {
-      $this.SetCertPath($value)
-    } elseif ($this.psObject.Properties.Name.Contains([string]$key)) {
-      $this."$key" = $value
-    } else {
-      $this.Add($key, $value)
+class UserConfig : EnvCfg {
+  [ValidateNotNullOrWhiteSpace()][string]$UserName = $env:USER
+  [ValidateNotNullOrWhiteSpace()][string]$UserId
+  [ValidateNotNullOrEmpty()][string[]]$projects
+  [ValidateRange(0, 73000)][int]$ExpiryDays = 1
+  [bool]$Use2FA = $false
+  [cert]$cert
+  UserConfig() : base() {
+    [bool]$Is_Unix_Os = [bool](Get-Variable IsLinux -ValueOnly -ErrorAction Ignore) -or [bool](Get-Variable IsMacOS -ValueOnly -ErrorAction Ignore)
+    [bool]$Is_Windows = [bool](Get-Variable IsWindows -ValueOnly -ErrorAction Ignore)
+    [string]$CertPath = switch ($true) {
+      $Is_Unix_Os { '/etc/ssl/private/'; break }
+      $Is_Windows { [IO.Path]::Combine($env:CommonProgramFiles, 'SSL', 'Private'); break }
+      Default { $PSScriptRoot }
+    }
+    $this.cert = New-Object cert -Property @{
+      Public  = [IO.Path]::Combine($CertPath, "$($this.UserName).cert.pem")
+      Private = [IO.Path]::Combine($CertPath, "$($this.UserName).key.pem");
+      Pfx     = [IO.Path]::Combine($CertPath, "$($this.UserName).pfx")
     }
   }
-  hidden [void] SetCertPath() {
-    $this.SetCertPath($(if ([bool](Get-Variable IsLinux -ValueOnly -ErrorAction Ignore) -or [bool](Get-Variable IsMacOS -ValueOnly -ErrorAction Ignore)) {
-          '/etc/ssl/private/'
-        } elseif ([bool](Get-Variable IsWindows -ValueOnly -ErrorAction Ignore)) {
-          [IO.Path]::Combine($env:CommonProgramFiles, 'SSL', 'Private')
-        } else {
-          $PSScriptRoot
-        }
-      )
-    )
-  }
-  hidden [void] SetCertPath([string]$CertPath) {
-    $this.PrivateCertFile = [IO.FileInfo][IO.Path]::Combine($CertPath, "$($this.CertName).key.pem");
-    $this.PublicCertFile = [IO.FileInfo][IO.Path]::Combine($CertPath, "$($this.CertName).cert.pem")
-    $this.PfxFile = [IO.FileInfo][IO.Path]::Combine($CertPath, "$($this.CertName).pfx")
+  [string] ToString() {
+    return ($this | ConvertTo-Json)
   }
 }
 
@@ -443,7 +459,7 @@ class EnvTools {
     if (![string]::IsNullOrWhiteSpace([System.Environment]::GetEnvironmentVariable("$sessionId"))) { if (!$Force) { return } }
     [System.Environment]::SetEnvironmentVariable("$sessionId", $((Get-Credential -Message "Enter your Pfx Password" -Title "-----[[ PFX Password ]]-----" -UserName $env:username).GetNetworkCredential().SecurePassword | ConvertFrom-SecureString), [EnvironmentVariableTarget]::Process)
   }
-  static [System.Security.Cryptography.X509Certificates.X509Certificate2] CreateSelfSignedCertificate([EnvCfg]$EnvCfg, [string]$sessionId) {
+  static [System.Security.Cryptography.X509Certificates.X509Certificate2] CreateSelfSignedCertificate([UserConfig]$UserCfg, [string]$sessionId) {
     [EnvTools]::SetSessionCreds([guid]$sessionId)
     $X509VarName = "X509CertHelper_class_$([EnvTools]::VarName_Suffix)";
     if (!$(Get-Variable $X509VarName -ValueOnly -Scope script -ErrorAction Ignore)) {
@@ -453,7 +469,7 @@ class EnvTools {
     $X509CertHelper_class = Get-Variable $X509VarName -ValueOnly -Scope script
     if ($X509CertHelper_class) { . $X509CertHelper_class; [EnvTools]::X509CertHelper = New-Object X509CertHelper }
     $Password = [System.Environment]::GetEnvironmentVariable($sessionId) | ConvertTo-SecureString
-    return [EnvTools]::X509CertHelper::CreateSelfSignedCertificate("CN=$($EnvCfg.CertName)", $EnvCfg.PrivateCertFile, $Password, 2048, [System.DateTimeOffset]::Now.AddDays(-1).DateTime, [System.DateTimeOffset]::Now.AddDays($EnvCfg.CertExpirationDays).DateTime)
+    return [EnvTools]::X509CertHelper::CreateSelfSignedCertificate("CN=$($UserCfg.UserName)", $UserCfg.cert.Private, $Password, 2048, [System.DateTimeOffset]::Now.AddDays(-1).DateTime, [System.DateTimeOffset]::Now.AddDays($UserCfg.ExpiryDays).DateTime)
   }
   static hidden [void] Resolve_modules([string[]]$Names) {
     $varName = "resolver_script_$([EnvTools]::VarName_Suffix)";
@@ -488,7 +504,6 @@ class EnvTools {
     return $isAdmn
   }
 }
-
 #endregion classes
 
 #region functions
@@ -523,30 +538,29 @@ function Set-dotEnvConfig {
   }
 }
 function Resolve-FilePath {
-  <#
-    .SYNOPSIS
-        Resolve FilePath
-    .DESCRIPTION
-        Gets the full Path of any file in a repo
-    .INPUTS
-        [string[]]
-    .OUTPUTS
-        [String[]]
-    .EXAMPLE
-        Resolve-FilePath * -Extensions ('.ps1', '.psm1')
-        Will get paths of powershell files in current location; thus [ModuleX]::ParseFile("*") will parse any powershell file in current location.
-    .EXAMPLE
-        Resolve-FilePath "Tests\Resources\Test-H*", "Tests\Resources\Test-F*"
-    .EXAMPLE
-        Resolve-FilePath ..\*.Tests.ps1
-    .NOTES
-        Created to work with the "ModuleX" module. (Its not tested for other use cases)
-        TopLevel directory search takes Priority.
-            eg: Resolve-FilePath ModuleX.ps1 will return ./.env instead of ./BuildOutput/module/0.1.0/.env
-                Unless ./.env doesn't exist; In that case it will Recursively search for other Names in the repo.
-    .LINK
-        https://github.com/alainQtec/dotEnv/blob/main/Private/dotEnv.Utils/dotEnv.Utils.psm1:Resolve-FilePath.ps1
-    #>
+  # .SYNOPSIS
+  #     Resolve FilePath
+  # .DESCRIPTION
+  #     Gets the full Path of any file in a repo
+  # .INPUTS
+  #     [string[]]
+  # .OUTPUTS
+  #     [String[]]
+  # .EXAMPLE
+  #     Resolve-FilePath * -Extensions ('.ps1', '.psm1')
+  #     Will get paths of powershell files in current location; thus [ModuleX]::ParseFile("*") will parse any powershell file in current location.
+  # .EXAMPLE
+  #     Resolve-FilePath "Tests\Resources\Test-H*", "Tests\Resources\Test-F*"
+  # .EXAMPLE
+  #     Resolve-FilePath ..\*.Tests.ps1
+  # .NOTES
+  #     Created to work with the "ModuleX" module. (Its not tested for other use cases)
+  #     TopLevel directory search takes Priority.
+  #         eg: Resolve-FilePath ModuleX.ps1 will return ./.env instead of ./BuildOutput/module/0.1.0/.env
+  #             Unless ./.env doesn't exist; In that case it will Recursively search for other Names in the repo.
+  # .LINK
+  #     https://github.com/alainQtec/dotEnv/blob/main/Private/dotEnv.Utils/dotEnv.Utils.psm1
+  #
   [CmdletBinding(DefaultParameterSetName = 'Query')]
   [OutputType([System.Object[]])]
   param (
