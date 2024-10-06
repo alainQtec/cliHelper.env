@@ -402,14 +402,14 @@ Begin {
           $res_Obj = [System.Collections.Generic.List[string[]]]::new()
           foreach ($line in $content) {
             if ([string]::IsNullOrWhiteSpace($line)) {
-              Write-Verbose "[GetdotEnv] Skipping empty line"
+              [dotEnv]::Log("Skipping empty line")
               continue
             }
             if ($line.StartsWith("#") -or $line.StartsWith("//")) {
-              Write-Verbose "[GetdotEnv] Skipping comment: $line"
+              [dotEnv]::Log("~ comment: $([dotEnv]::sensor($line))");
               continue
             }
-                        ($m, $d ) = switch -Wildcard ($line) {
+            ($m, $d ) = switch -Wildcard ($line) {
               "*:=*" { "Prefix", ($line -split ":=", 2); Break }
               "*=:*" { "Suffix", ($line -split "=:", 2); Break }
               "*=*" { "Assign", ($line -split "=", 2); Break }
