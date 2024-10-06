@@ -14,13 +14,17 @@
     [string]$Name,
 
     [parameter(Mandatory = $false, Position = 1)]
-    [System.EnvironmentVariableTarget]$Scope = "Process"
+    [System.EnvironmentVariableTarget]$Scope = "Process",
+
+    [switch]$Force
   )
 
   process {
     if ($PSCmdlet.ShouldProcess("Target", "Operation")) {
-      Add-Env -Name $Name -Value $null -Scope $Scope -Force
-      # Set-Content Env:/$Name $null
+      Add-Env -Name $Name -Value $null -Scope $Scope
+      if ($Force) {
+        Set-Content "Env:/$Name" -Value $null -Force
+      }
     }
   }
 }

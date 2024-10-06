@@ -24,7 +24,7 @@ function Add-Env {
     [string]$Name,
 
     [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'fromfile')]
-    [ValidateNotNullOrEmpty()]
+    [ValidateNotNullOrEmpty()][Alias('File')]
     [IO.FileInfo]$source,
 
     [parameter(Mandatory = $false, Position = 1, ParameterSetName = 'session')]
@@ -37,7 +37,10 @@ function Add-Env {
 
     [Parameter(Mandatory = $false, Position = 3, ParameterSetName = '__AllParameterSets')]
     [ValidateNotNullOrWhiteSpace()]
-    [string]$OutFile
+    [string]$OutFile,
+
+    [Parameter(Mandatory = $false, ParameterSetName = '__AllParameterSets')]
+    [switch]$Force
   )
 
   begin {

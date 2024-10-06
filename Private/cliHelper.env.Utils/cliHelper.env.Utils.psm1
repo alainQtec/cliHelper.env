@@ -502,7 +502,7 @@ class EnvTools {
     }
   }
   static [void] Log([string]$Message) {
-    if ((Get-Variable VerbosePreference -ValueOnly) -eq 'Continue') { Write-Host "🔵 [dotEnv] " -NoNewline; Write-Host $Message -f Cyan }
+    Write-Verbose "🔵 $Message"
   }
   static [string] GetHostOs() {
     #TODO: refactor so that it returns one of these: [Enum]::GetNames([System.PlatformID])

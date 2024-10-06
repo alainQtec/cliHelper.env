@@ -6,7 +6,14 @@
   [CmdletBinding(DefaultParameterSetName = "path")]
   param (
     [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'keyvalue')]
-    [ValidateNotNullOrWhiteSpace()]
+    [ValidateScript({
+        if (![IO.File]::Exists($_)) {
+          throw [System.IO.FileNotFoundException]::new("Please provide a valid path.", $_)
+        } else {
+          $true
+        }
+      }
+    )]
     [string]$Path,
 
     [Parameter(Mandatory = $true, Position = 1, ParameterSetName = 'keyvalue')]
@@ -23,7 +30,7 @@
 
   end {
     if ($PSCmdlet.ParameterSetName -eq "keyvalue") {
-      [dotEnv]::Update($Path, $Name, $Value)
+      [dotEnv]::Update((Get-Item $Path), $Name, $Value)
     } else {
       $c = [dotEnv]::Update($Entries, $Name, $Value)
       [IO.File]::WriteAllText($Path, ($c.ForEach({ $_.ToString() }) | Out-String).Trim(), [System.Text.Encoding]::UTF8)
