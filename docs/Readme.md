@@ -122,6 +122,8 @@ Deploying:
 ./build.ps1 -Task Deploy
 ```
 
+Commit with message: !deploy and thats it.
+
 </details>
 
 <details>
