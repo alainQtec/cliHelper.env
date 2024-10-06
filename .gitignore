@@ -397,9 +397,9 @@ BuildOutput/
 LocalPSRepo/
 Tests/results.xml
 Tests/Resources/
-Tests/dotEnv.Module.Tests.ps1
-Tests/dotEnv.Features.Tests.ps1
-Tests/dotEnv.Intergration.Tests.ps1
+Tests/cliHelper.env.Module.Tests.ps1
+Tests/cliHelper.env.Features.Tests.ps1
+Tests/cliHelper.env.Intergration.Tests.ps1
 Tests/Resources/Test-GitHubScript.ps1
 
 # others

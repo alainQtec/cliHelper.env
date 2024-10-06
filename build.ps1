@@ -1,10 +1,10 @@
 ﻿<#
 .SYNOPSIS
-    dotEnv buildScript
+    cliHelper.env buildScript
 .DESCRIPTION
-    A custom Psake buildScript for the module dotEnv.
+    A custom Psake buildScript for the module cliHelper.env.
 .LINK
-    https://github.com/alainQtec/dotEnv/blob/main/build.ps1
+    https://github.com/alainQtec/cliHelper.env/blob/main/build.ps1
 .EXAMPLE
     Running ./build.ps1 will only "Init, Compile & Import" the module; That's it, no tests.
     To run tests Use:
@@ -26,7 +26,7 @@ param(
       if ($IsValid) {
         return $true
       } else {
-        throw "ValidSet: $($Tasks -join ', ')."
+        throw [System.ArgumentException]::new('Task', "ValidSet: $($Tasks -join ', ').")
       }
     }
   )][ValidateNotNullOrEmpty()]
@@ -43,9 +43,9 @@ Begin {
   #region    Variables
   [Environment]::SetEnvironmentVariable('IsAC', $(if (![string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable('GITHUB_WORKFLOW'))) { '1' } else { '0' }), [System.EnvironmentVariableTarget]::Process)
   [Environment]::SetEnvironmentVariable('IsCI', $(if (![string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable('TF_BUILD'))) { '1' }else { '0' }), [System.EnvironmentVariableTarget]::Process)
-  [Environment]::SetEnvironmentVariable('RUN_ID', $(if ([bool][int]$env:IsAC) { [Environment]::GetEnvironmentVariable('GITHUB_RUN_ID') }else { [Guid]::NewGuid().Guid.substring(0, 21).replace('-', [string]::Join('', (0..9 | Get-Random -Count 1))) + '_' }), [System.EnvironmentVariableTarget]::Process);
-  $dataFile = [System.IO.FileInfo]::new([IO.Path]::Combine($PSScriptRoot, 'en-US', 'dotEnv.strings.psd1'))
-  if (!$dataFile.Exists) { throw [System.IO.FileNotFoundException]::new('Unable to find the LocalizedData file.', 'dotEnv.strings.psd1') }
+  [Environment]::SetEnvironmentVariable('RUN_ID', $(if ([bool][int]$env:IsAC -or $env:CI -eq "true") { [Environment]::GetEnvironmentVariable('GITHUB_RUN_ID') }else { [Guid]::NewGuid().Guid.substring(0, 21).replace('-', [string]::Join('', (0..9 | Get-Random -Count 1))) + '_' }), [System.EnvironmentVariableTarget]::Process);
+  $dataFile = [System.IO.FileInfo]::new([IO.Path]::Combine($PSScriptRoot, 'en-US', 'cliHelper.env.strings.psd1'))
+  if (!$dataFile.Exists) { throw [System.IO.FileNotFoundException]::new('Unable to find the LocalizedData file.', 'cliHelper.env.strings.psd1') }
   $script:localizedData = [scriptblock]::Create("$([IO.File]::ReadAllText($dataFile))").Invoke() # same as "Get-LocalizedData -DefaultUICulture 'en-US'" but the cmdlet is not always installed
   #region    ScriptBlocks
   $script:PSake_ScriptBlock = [scriptblock]::Create({
@@ -72,13 +72,14 @@ Begin {
         $PathSeperator = [IO.Path]::PathSeparator
         $DirSeperator = [IO.Path]::DirectorySeparatorChar
         if ([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage') -match "!verbose") {
-          $Verbose = @{Verbose = $True }
+          $Verbose = @{ Verbose = $True }
         }
         $null = @($tests, $Verbose, $TestFile, $outputDir, $outputModDir, $outputModVerDir, $lines, $DirSeperator, $PathSeperator)
-        $null = Invoke-Command -NoNewScope -ScriptBlock {
-          $l = [IO.File]::ReadAllLines([IO.Path]::Combine($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildScriptPath')), 'build.ps1'))
-          $t = New-Item $([IO.Path]::GetTempFileName().Replace('.tmp', '.ps1'))
-          Set-Content -Path "$($t.FullName)" -Value $l[$l.IndexOf('    #region    BuildHelper_Functions')..$l.IndexOf('    #endregion BuildHelper_Functions')] -Encoding UTF8 | Out-Null; . $t;
+        $null = Invoke-Command -NoNewScope -Script {
+          $l = [IO.File]::ReadAllLines([IO.Path]::Combine($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildScriptPath')), 'build.ps1'));
+          $t = New-Item $([IO.Path]::GetTempFileName().Replace('.tmp', '.ps1'));
+          $ind1 = $l.IndexOf('  #region    BuildHelper_Functions'); $ind2 = $l.IndexOf('  #endregion BuildHelper_Functions')
+          Set-Content -Path "$($t.FullName)" -Value $l[$ind1 .. $ind2] -Encoding UTF8 | Out-Null; . $t;
           Remove-Item -Path $t.FullName
         }
       }
@@ -96,9 +97,10 @@ Begin {
         Write-Verbose "$((Get-ChildItem Env: | Where-Object {$_.Name -match "^(BUILD_|SYSTEM_|BH)"} | Sort-Object Name | Format-Table Name,Value -AutoSize | Out-String).Trim())"
         Write-Verbose "Module Build version: $BuildNumber"
       } -description 'Initialize build environment'
-
-      Task clean -depends Init {
+      Task -name clean -depends Init {
         $Host.UI.WriteLine()
+        $modules = Get-Module -name $ProjectName -ListAvailable -ErrorAction Ignore
+        $modules | Remove-Module -Force; $modules | Uninstall-Module -ErrorAction Ignore -Force
         Remove-Module $ProjectName -Force -ErrorAction SilentlyContinue
         if (Test-Path -Path $outputDir -PathType Container -ErrorAction SilentlyContinue) {
           Write-Verbose "Cleaning Previous build Output ..."
@@ -186,144 +188,128 @@ Begin {
         $Env:PSModulePath = $origModulePath
       } -description 'Run Pester tests against compiled module'
 
-      Task Deploy -depends Test -description 'Deploy module to PSGallery' -preaction {
-        if (($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildSystem')) -eq 'VSTS' -and $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!deploy' -and $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BranchName')) -eq "main") -or $script:ForceDeploy -eq $true) {
-          if ($null -eq (Get-Module PoshTwit -ListAvailable)) {
-            "    Installing PoshTwit module..."
-            Install-Module PoshTwit -Scope CurrentUser
-          }
-          Import-Module PoshTwit -Verbose:$false
+      Task Deploy -depends Test -description 'Release new github version and Publish module to PSGallery' {
+        if ([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildSystem') -eq 'VSTS' -or ($env:CI -eq "true" -and $env:GITHUB_RUN_ID)) {
           # Load the module, read the exported functions, update the psd1 FunctionsToExport
           $commParsed = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage') | Select-String -Pattern '\sv\d+\.\d+\.\d+\s'
           if ($commParsed) {
             $commitVer = $commParsed.Matches.Value.Trim().Replace('v', '')
           }
-          $CurrentVersion = (Get-Module $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName'))).Version
-          $galVer = '0.0.1'; if ($moduleInGallery = Find-Module "$([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName'))*" -Repository PSGallery) {
-            $galVer = $moduleInGallery.Version.ToString()
-            "    Current version on the PSGallery is: $galVer"
-          }
-          $galVerSplit = $galVer.Split('.')
+          $current_build_version = $CurrentVersion = (Get-Module $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName'))).Version
+          $Latest_Module_Verion = Get-LatestModuleVersion -name ([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName')) -Source PsGallery
+          "Module Current version on the PSGallery: $Latest_Module_Verion"
+          $galVerSplit = "$Latest_Module_Verion".Split('.')
           $nextGalVer = [System.Version](($galVerSplit[0..($galVerSplit.Count - 2)] -join '.') + '.' + ([int]$galVerSplit[-1] + 1))
-
+          # Bump MODULE Version
           $versionToDeploy = switch ($true) {
                         ($commitVer -and ([System.Version]$commitVer -lt $nextGalVer)) {
               Write-Host -ForegroundColor Yellow "Version in commit message is $commitVer, which is less than the next Gallery version and would result in an error. Possible duplicate deployment build, skipping module bump and negating deployment"
-              Set-Env -name ($env:RUN_ID + 'CommitMessage') -Value $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')).Replace('!deploy', '')
+              Set-EnvironmentVariable -name ($env:RUN_ID + 'CommitMessage') -Value $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')).Replace('!deploy', '')
               $null
               break
             }
                         ($commitVer -and ([System.Version]$commitVer -gt $nextGalVer)) {
-              Write-Host -ForegroundColor Green "Module version to deploy: $commitVer [from commit message]"
+              Write-Host -ForegroundColor Green "Module Bumped version: $commitVer [from commit message]"
               [System.Version]$commitVer
               break
             }
                         ($CurrentVersion -ge $nextGalVer) {
-              Write-Host -ForegroundColor Green "Module version to deploy: $CurrentVersion [from manifest]"
+              Write-Host -ForegroundColor Green "Module Bumped version: $CurrentVersion [from manifest]"
               $CurrentVersion
               break
             }
                         ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!hotfix') {
-              Write-Host -ForegroundColor Green "Module version to deploy: $nextGalVer [commit message match '!hotfix']"
+              Write-Host -ForegroundColor Green "Module Bumped version: $nextGalVer [commit message match '!hotfix']"
               $nextGalVer
               break
             }
                         ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!minor') {
               $minorVers = [System.Version]("{0}.{1}.{2}" -f $nextGalVer.Major, ([int]$nextGalVer.Minor + 1), 0)
-              Write-Host -ForegroundColor Green "Module version to deploy: $minorVers [commit message match '!minor']"
+              Write-Host -ForegroundColor Green "Module Bumped version: $minorVers [commit message match '!minor']"
               $minorVers
               break
             }
                         ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!major') {
               $majorVers = [System.Version]("{0}.{1}.{2}" -f ([int]$nextGalVer.Major + 1), 0, 0)
-              Write-Host -ForegroundColor Green "Module version to deploy: $majorVers [commit message match '!major']"
+              Write-Host -ForegroundColor Green "Module Bumped version: $majorVers [commit message match '!major']"
               $majorVers
               break
             }
             Default {
-              Write-Host -ForegroundColor Green "Module version to deploy: $nextGalVer [PSGallery next version]"
+              Write-Host -ForegroundColor Green "Module Bumped version: $nextGalVer [PSGallery next version]"
               $nextGalVer
             }
           }
-          # Bump the module version
-          if ($versionToDeploy) {
-            try {
-              $manifest = Import-PowerShellDataFile -Path $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'PSModuleManifest'))
-              if ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildSystem')) -eq 'VSTS' -and -not [String]::IsNullOrEmpty($Env:NugetApiKey)) {
-                $manifestPath = Join-Path $outputModVerDir "$($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName'))).psd1"
-                if (-not $manifest) {
-                  $manifest = Import-PowerShellDataFile -Path $manifestPath
-                }
-                if ($manifest.ModuleVersion.ToString() -eq $versionToDeploy.ToString()) {
-                  "    Manifest is already the expected version. Skipping manifest version update"
-                } else {
-                  "    Updating module version on manifest to [$($versionToDeploy)]"
-                  Update-Metadata -Path $manifestPath -PropertyName ModuleVersion -Value $versionToDeploy -Verbose
-                }
-                try {
-                  "    Publishing version [$($versionToDeploy)] to PSGallery..."
-                  Publish-Module -Path $outputModVerDir -NuGetApiKey $Env:NugetApiKey -Repository PSGallery -Verbose
-                  "    Deployment successful!"
-                } catch {
-                  $err = $_
-                  Write-BuildError $err.Exception.Message
-                  throw $err
-                }
-              } else {
-                "    [SKIPPED] Deployment of version [$($versionToDeploy)] to PSGallery"
-              }
-              $commitId = git rev-parse --verify HEAD
-              if (![string]::IsNullOrWhiteSpace($Env:GitHubPAT) -and [bool][int]$env:IsAC) {
-                "    Creating Release ZIP..."
-                $zipPath = [System.IO.Path]::Combine($PSScriptRoot, "$($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName'))).zip")
-                if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-                Add-Type -Assembly System.IO.Compression.FileSystem
-                [System.IO.Compression.ZipFile]::CreateFromDirectory($outputModDir, $zipPath)
-                "    Publishing Release v$($versionToDeploy.ToString()) @ commit Id [$($commitId)] to GitHub..."
-                $ReleaseNotes = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'ReleaseNotes')
-                $ReleaseNotes += (git log -1 --pretty=%B | Select-Object -Skip 2) -join "`n"
-                $ReleaseNotes += $script:localizedData.ReleaseNotes.Replace('<versionToDeploy>', $versionToDeploy.ToString())
-                Set-Env -name ('{0}{1}' -f $env:RUN_ID, 'ReleaseNotes') -Value $ReleaseNotes
-                $gitHubParams = @{
-                  VersionNumber    = $versionToDeploy.ToString()
-                  CommitId         = $commitId
-                  ReleaseNotes     = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'ReleaseNotes')
-                  ArtifactPath     = $zipPath
-                  GitHubUsername   = 'alainQtec'
-                  GitHubRepository = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName')
-                  GitHubApiKey     = $Env:GitHubPAT
-                  Draft            = $false
-                }
-                Publish-GithubRelease @gitHubParams
-                "    Release creation successful!"
-              } else {
-                "    [SKIPPED] Publishing Release v$($versionToDeploy) @ commit Id [$($commitId)] to GitHub"
-              }
-              if ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildSystem')) -eq 'VSTS' -and -not [String]::IsNullOrEmpty($Env:TwitterAccessSecret) -and -not [String]::IsNullOrEmpty($Env:TwitterAccessToken) -and -not [String]::IsNullOrEmpty($Env:TwitterConsumerKey) -and -not [String]::IsNullOrEmpty($Env:TwitterConsumerSecret)) {
-                "    Publishing tweet about new release..."
-                $text = "#$($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName'))) v$($versionToDeploy) is now available on the #PSGallery! https://www.powershellgallery.com/packages/$($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName')))/$($versionToDeploy.ToString()) #PowerShell"
-                $manifest.PrivateData.PSData.Tags | ForEach-Object {
-                  $text += " #$($_)"
-                }
-                if ($text.Length -gt 280) {
-                  "    Trimming [$($text.Length - 280)] extra characters from tweet text to get to 280 character limit..."
-                  $text = $text.Substring(0, 280)
-                }
-                "    Tweet text: $text"
-                Publish-Tweet -Tweet $text -ConsumerKey $Env:TwitterConsumerKey -ConsumerSecret $Env:TwitterConsumerSecret -AccessToken $Env:TwitterAccessToken -AccessSecret $Env:TwitterAccessSecret
-                "    Tweet successful!"
-              } else {
-                "    [SKIPPED] Twitter update of new release"
-              }
-            } catch {
-              Write-BuildError $_
-            }
-          } else {
+          if (!$versionToDeploy) {
             Write-Host -ForegroundColor Yellow "No module version matched! Negating deployment to prevent errors"
-            Set-Env -name ($env:RUN_ID + 'CommitMessage') -Value $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')).Replace('!deploy', '')
+            Set-EnvironmentVariable -name ($env:RUN_ID + 'CommitMessage') -Value $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')).Replace('!deploy', '')
+          }
+          try {
+            [ValidateNotNullOrWhiteSpace()][string]$versionToDeploy = $versionToDeploy.ToString()
+            $manifest = Import-PowerShellDataFile -Path $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'PSModuleManifest'))
+            $latest_Github_release = Invoke-WebRequest "https://api.github.com/repos/alainQtec/cliHelper.env/releases/latest" | ConvertFrom-Json
+            $latest_Github_release = [PSCustomObject]@{
+              name = $latest_Github_release.name
+              ver  = [version]::new($latest_Github_release.tag_name.substring(1))
+              url  = $latest_Github_release.html_url
+            }
+            $Is_Lower_PsGallery_Version = [version]$current_build_version -le $Latest_Module_Verion
+            $should_Publish_ToPsGallery = ![string]::IsNullOrWhiteSpace($env:NUGETAPIKEY) -and !$Is_Lower_PsGallery_Version
+            $Is_Lower_GitHub_Version = [version]$current_build_version -le $latest_Github_release.ver
+            $should_Publish_GitHubRelease = ![string]::IsNullOrWhiteSpace($env:GitHubPAT) -and ($env:CI -eq "true" -and $env:GITHUB_RUN_ID) -and !$Is_Lower_GitHub_Version
+            if ($should_Publish_ToPsGallery) {
+              $manifestPath = Join-Path $outputModVerDir "$($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName'))).psd1"
+              if (-not $manifest) {
+                $manifest = Import-PowerShellDataFile -Path $manifestPath
+              }
+              if ($manifest.ModuleVersion.ToString() -eq $versionToDeploy.ToString()) {
+                "    Manifest is already the expected version. Skipping manifest version update"
+              } else {
+                "    Updating module version on manifest to [$versionToDeploy]"
+                Update-Metadata -Path $manifestPath -PropertyName ModuleVersion -Value $versionToDeploy -Verbose
+              }
+              Write-Host "    Publishing version [$versionToDeploy] to PSGallery..." -ForegroundColor Green
+              Publish-Module -Path $outputModVerDir -NuGetApiKey $env:NUGETAPIKEY -Repository PSGallery -Verbose
+              Write-Host "    Published to PsGallery successful!" -ForegroundColor Green
+            } else {
+              if ($Is_Lower_PsGallery_Version) { Write-Warning "SKIPPED Publishing. Module version $Latest_Module_Verion already exists on PsGallery!" }
+              Write-Verbose "    SKIPPED Publish of version [$versionToDeploy] to PSGallery"
+            }
+            $commitId = git rev-parse --verify HEAD;
+            if ($should_Publish_GitHubRelease) {
+              $ReleaseNotes = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'ReleaseNotes')
+              [ValidateNotNullOrWhiteSpace()][string]$ReleaseNotes = $ReleaseNotes
+              "    Creating Release ZIP..."
+              $ZipTmpPath = [System.IO.Path]::Combine($PSScriptRoot, "$($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName'))).zip")
+              if ([IO.File]::Exists($ZipTmpPath)) { Remove-Item $ZipTmpPath -Force }
+              Add-Type -Assembly System.IO.Compression.FileSystem
+              [System.IO.Compression.ZipFile]::CreateFromDirectory($outputModDir, $ZipTmpPath)
+              Write-Heading "    Publishing Release v$versionToDeploy @ commit Id [$($commitId)] to GitHub..."
+              $ReleaseNotes += (git log -1 --pretty=%B | Select-Object -Skip 2) -join "`n"
+              $ReleaseNotes = $ReleaseNotes.Replace('<versionToDeploy>', $versionToDeploy)
+              Set-EnvironmentVariable -name ('{0}{1}' -f $env:RUN_ID, 'ReleaseNotes') -Value $ReleaseNotes
+              $gitHubParams = @{
+                VersionNumber    = $versionToDeploy
+                CommitId         = $commitId
+                ReleaseNotes     = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'ReleaseNotes')
+                ArtifactPath     = $ZipTmpPath
+                GitHubUsername   = 'alainQtec'
+                GitHubRepository = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName')
+                GitHubApiKey     = $env:GitHubPAT
+                Draft            = $false
+              }
+              Publish-GithubRelease @gitHubParams
+              Write-Heading "    Github release created successful!"
+            } else {
+              if ($Is_Lower_GitHub_Version) { Write-Warning "SKIPPED Releasing. Module version $current_build_version already exists on Github!" }
+              Write-Verbose "    SKIPPED GitHub Release v$($versionToDeploy) @ commit Id [$($commitId)] to GitHub"
+            }
+          } catch {
+            $_ | Format-List * -Force
+            Write-BuildError $_
           }
         } else {
-          Write-Host -ForegroundColor Magenta "Build system is not VSTS!"
+          Write-Host -ForegroundColor Magenta "UNKNOWN Build system"
         }
       }
     }
@@ -344,7 +330,7 @@ Begin {
         buildFile = $Psake_BuildFile.FullName
         taskList  = $Task
       }
-      if ($Task -eq 'TestOnly') {
+      if ($Task -contains 'TestOnly') {
         Set-Variable -Name ExcludeTag -Scope global -Value @('Module')
       } else {
         Set-Variable -Name ExcludeTag -Scope global -Value $null
@@ -498,23 +484,23 @@ Begin {
       $Version = $script:localizedData.ModuleVersion
       if ($null -eq $Version) { throw [System.ArgumentNullException]::new('version', "Please make sure localizedData.ModuleVersion is not null.") }
       Write-Heading "Set Build Variables for Version: $Version"
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'BuildStart') -Value $(Get-Date -Format o)
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'BuildScriptPath') -Value $Path
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'BuildStart') -Value $(Get-Date -Format o)
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'BuildScriptPath') -Value $Path
       Set-Variable -Name BuildScriptPath -Value ([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildScriptPath')) -Scope Local -Force
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'BuildSystem') -Value $(if ([bool][int]$env:IsCI) { "VSTS" }else { [System.Environment]::MachineName })
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'ProjectPath') -Value $(if ([bool][int]$env:IsCI) { $Env:SYSTEM_DEFAULTWORKINGDIRECTORY }else { $BuildScriptPath })
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'BranchName') -Value $(if ([bool][int]$env:IsCI) { $Env:BUILD_SOURCEBRANCHNAME }else { $(Push-Location $BuildScriptPath; (git rev-parse --abbrev-ref HEAD).Trim(); Pop-Location) })
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'CommitMessage') -Value $(if ([bool][int]$env:IsCI) { $Env:BUILD_SOURCEVERSIONMESSAGE }else { $(Push-Location $BuildScriptPath; (git log --format=%B -n 1).Trim(); Pop-Location) })
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'BuildNumber') -Value $(if ([bool][int]$env:IsCI) { $Env:BUILD_BUILDNUMBER } else { $(if ([string]::IsNullOrWhiteSpace($Version)) { Set-Content $VersionFile -Value '1.0.0.1' -Encoding UTF8 -PassThru }else { $Version }) })
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'BuildSystem') -Value $(if ([bool][int]$env:IsCI -or ($Env:BUILD_BUILDURI -like 'vstfs:*')) { "VSTS" }else { [System.Environment]::MachineName })
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'ProjectPath') -Value $(if ([bool][int]$env:IsCI) { $Env:SYSTEM_DEFAULTWORKINGDIRECTORY }else { $BuildScriptPath })
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'BranchName') -Value $(if ([bool][int]$env:IsCI) { $Env:BUILD_SOURCEBRANCHNAME }else { $(Push-Location $BuildScriptPath; (git rev-parse --abbrev-ref HEAD).Trim(); Pop-Location) })
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'CommitMessage') -Value $(if ([bool][int]$env:IsCI) { $Env:BUILD_SOURCEVERSIONMESSAGE }else { $(Push-Location $BuildScriptPath; (git log --format=%B -n 1).Trim(); Pop-Location) })
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'BuildNumber') -Value $(if ([bool][int]$env:IsCI) { $Env:BUILD_BUILDNUMBER } else { $(if ([string]::IsNullOrWhiteSpace($Version)) { Set-Content $VersionFile -Value '1.0.0.1' -Encoding UTF8 -PassThru }else { $Version }) })
       Set-Variable -Name BuildNumber -Value ([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildNumber')) -Scope Local -Force
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'BuildOutput') -Value $([IO.path]::Combine($BuildScriptPath, "BuildOutput"))
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'BuildOutput') -Value $([IO.path]::Combine($BuildScriptPath, "BuildOutput"))
       Set-Variable -Name BuildOutput -Value ([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildOutput')) -Scope Local -Force
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'ProjectName') -Value $script:localizedData.ModuleName
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'ProjectName') -Value $script:localizedData.ModuleName
       Set-Variable -Name ProjectName -Value ([Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName')) -Scope Local -Force
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'PSModulePath') -Value $([IO.path]::Combine($BuildOutput, $ProjectName, $BuildNumber))
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'PSModuleManifest') -Value $([IO.path]::Combine($BuildOutput, $ProjectName, $BuildNumber, "$ProjectName.psd1"))
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'ModulePath') -Value $(if (![string]::IsNullOrWhiteSpace($Env:PSModuleManifest)) { [IO.Path]::GetDirectoryName($Env:PSModuleManifest) }else { [IO.Path]::GetDirectoryName($BuildOutput) })
-      Set-Env -Name ('{0}{1}' -f $env:RUN_ID, 'ReleaseNotes') -Value $script:localizedData.ReleaseNotes
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'PSModulePath') -Value $([IO.path]::Combine($BuildOutput, $ProjectName, $BuildNumber))
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'PSModuleManifest') -Value $([IO.path]::Combine($BuildOutput, $ProjectName, $BuildNumber, "$ProjectName.psd1"))
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'ModulePath') -Value $(if (![string]::IsNullOrWhiteSpace($Env:PSModuleManifest)) { [IO.Path]::GetDirectoryName($Env:PSModuleManifest) }else { [IO.Path]::GetDirectoryName($BuildOutput) })
+      Set-EnvironmentVariable -Name ('{0}{1}' -f $env:RUN_ID, 'ReleaseNotes') -Value $script:localizedData.ReleaseNotes
     }
   }
   function Get-Elapsed {
@@ -1119,7 +1105,7 @@ Begin {
       Write-Error $Message
     }
   }
-  function Set-Env {
+  function Set-EnvironmentVariable {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
       [parameter(Position = 0)]
@@ -1386,30 +1372,26 @@ Process {
   foreach ($Name in @('PackageManagement', 'PowerShellGet')) {
     $Host.UI.WriteLine(); Resolve-Module -Name $Name -UpdateModule -Verbose:$script:DefaultParameterValues['*-Module:Verbose'] -ErrorAction Stop
   }
+  $build_sys = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildSystem');
+  $lastCommit = git log -1 --pretty=%B
+  Write-Heading "Current build system is $build_sys"
   Write-Heading "Finalizing build Prerequisites and Resolving dependencies ..."
-  if ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildSystem')) -eq 'VSTS') {
-    if ($Task -eq 'Deploy') {
+  if ($build_sys -eq 'VSTS' -or ($env:CI -eq "true" -and $env:GITHUB_RUN_ID)) {
+    if ($Task -contains 'Deploy') {
       $MSG = "Task is 'Deploy' and conditions for deployment are:`n" +
-      "    + Current build system is VSTS     : $($Env:BUILD_BUILDURI -like 'vstfs:*') [$Env:BUILD_BUILDURI]`n" +
-      "    + Current branch is main           : $($Env:BUILD_SOURCEBRANCHNAME -eq 'main') [$Env:BUILD_SOURCEBRANCHNAME]`n" +
-      "    + Source is not a pull request     : $($Env:BUILD_SOURCEBRANCH -notlike '*pull*') [$Env:BUILD_SOURCEBRANCH]`n" +
-      "    + Commit message matches '!deploy' : $($Env:BUILD_SOURCEVERSIONMESSAGE -match '!deploy') [$Env:BUILD_SOURCEVERSIONMESSAGE]`n" +
-      "    + Current PS major version is 5    : $($PSVersionTable.PSVersion.Major -eq 5) [$($PSVersionTable.PSVersion.ToString())]`n" +
-      "    + NuGet API key is not null        : $($null -ne $Env:NugetApiKey)`n"
-      if (
-        $Env:BUILD_BUILDURI -notlike 'vstfs:*' -or
-        $Env:BUILD_SOURCEBRANCH -like '*pull*' -or
-        $Env:BUILD_SOURCEVERSIONMESSAGE -notmatch '!deploy' -or
-        $Env:BUILD_SOURCEBRANCHNAME -ne 'main' -or
-        $PSVersionTable.PSVersion.Major -ne 5 -or
-        $null -eq $Env:NugetApiKey
-      ) {
+      "    + GitHub API key is not null       : $(![string]::IsNullOrWhiteSpace($env:GitHubPAT))`n" +
+      "    + Current branch is main           : $(($env:GITHUB_REF -replace "refs/heads/") -eq 'main')`n" +
+      "    + Source is not a pull request     : $($env:GITHUB_EVENT_NAME -ne "pull_request") [$env:GITHUB_EVENT_NAME]`n" +
+      "    + Commit message matches '!deploy' : $($lastCommit -match "!deploy") [$lastCommit]`n" +
+      "    + Is Current PS version < 5 ?      : $($PSVersionTable.PSVersion.Major -lt 5) [$($PSVersionTable.PSVersion.ToString())]`n" +
+      "    + NuGet API key is not null        : $(![string]::IsNullOrWhiteSpace($env:NUGETAPIKEY))`n"
+      if ($PSVersionTable.PSVersion.Major -lt 5 -or [string]::IsNullOrWhiteSpace($env:NUGETAPIKEY) -or [string]::IsNullOrWhiteSpace($env:GitHubPAT) ) {
         $MSG = $MSG.Replace('and conditions for deployment are:', 'but conditions are not correct for deployment.')
         $MSG | Write-Host -ForegroundColor Yellow
         if (($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!deploy' -and $([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BranchName')) -eq "main") -or $script:ForceDeploy -eq $true) {
-          Write-Warning "Force Deploy"
+          Write-Warning "Force Deploying detected"
         } else {
-          "Skipping psake for this job!" | Write-Host -ForegroundColor Yellow
+          "Skipping Psake for this job!" | Write-Host -ForegroundColor Yellow
           exit 0
         }
       } else {
@@ -1421,8 +1403,7 @@ Process {
       $Project_Name = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'ProjectName')
       $Project_Path = [Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildOutput')
       Write-Heading "Importing $Project_Name to local scope"
-      $Module_Path = [IO.Path]::Combine($Project_Path, $Project_Name);
-      Invoke-CommandWithLog { Import-Module $Module_Path -Verbose }
+      Invoke-CommandWithLog { Import-Module $([IO.Path]::Combine($Project_Path, $Project_Name)) -Verbose }
     }
   } else {
     Invoke-Command -ScriptBlock $PSake_Build
@@ -1456,7 +1437,7 @@ Process {
     # Import Module
     if ($Task -contains 'Import' -and $psake.build_success) {
       Write-Heading "Import $ModuleName to local scope"
-      Invoke-CommandWithLog { Import-Module $ModuleName }
+      Import-Module $ModuleName
     }
     Write-Heading "CleanUp: Uninstall the test module, and delete the LocalPSRepo"
     # Remove Module
@@ -1477,7 +1458,7 @@ End {
   Write-EnvironmentSummary "Build finished"
   if (![bool][int]$env:IsAC) {
     Invoke-Command $Clean_EnvBuildvariables -ArgumentList $env:RUN_ID
+    [Environment]::SetEnvironmentVariable('RUN_ID', $null)
   }
-  [Environment]::SetEnvironmentVariable('RUN_ID', $null)
-  exit ( [int](!$psake.build_success) )
+  exit ([int](!$psake.build_success))
 }

@@ -26,7 +26,7 @@
   #     WAYLAND_DISPLAY            wayland-1
   #   Reads all env variables from Process scope and only returns those with DISPLAY in their name
   # .LINK
-  #   https://github.com/alainQtec/dotEnv/Public/Get-Env.ps1
+  #   https://github.com/alainQtec/cliHelper.env/Public/Get-Env.ps1
   [CmdletBinding(DefaultParameterSetName = 'session')]
   [OutputType([dotEntry[]])]
   param(

@@ -24,7 +24,7 @@ enum EncryptionScope {
 #     This class aim to prevent that; or at least make it nearly impossible.
 #     By using an int[] of indices as a lookup table to rearrange the $nonce and $bytes.
 #     The int[] array is derrivated from the password that the user provides.
-#     The donside is that: Input bytes.length has to be >= 16.
+#     The downside is that: Input bytes.length has to be >= 16. 💀
 class Shuffl3r {
   static [Byte[]] Combine([Byte[]]$Bytes, [Byte[]]$Nonce, [securestring]$Passwod) {
     return [Shuffl3r]::Combine($bytes, $Nonce, [AesGCM]::tostring($Passwod))

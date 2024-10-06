@@ -10,7 +10,7 @@
   # .LINK
   #     Initialize-EnvConfig
   # .LINK
-  #     https://github.com/alainQtec/dotEnv/Public/Protect-Env.ps1
+  #     https://github.com/alainQtec/cliHelper.env/Public/Protect-Env.ps1
   # .EXAMPLE
   #     Protect-Env NEXT_PUBLIC_SUPER_SECRET_KEY
   #     Explanation of the function or its result. You can include multiple examples with additional .EXAMPLE lines

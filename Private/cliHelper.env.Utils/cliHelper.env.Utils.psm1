@@ -288,13 +288,13 @@ class vars {
 }
 
 class EnvTools {
-  static $X509CertHelper
   static [vars] $vars = [vars]::new()
-  static [EnvCfg] $config = [EnvCfg]::new()
+  static $X509CertHelper = [EnvTools]::GetX509CertHelper()
+  static [EnvCfg] $config = [EnvCfg]::new(@{User = [UserConfig]::new(); Project = [ProjectConfig]::new() })
   Static [IO.DirectoryInfo] $DataPath = (Get-DataPath 'dotEnv' 'Data')
   static hidden [string]$VarName_Suffix = [EnvTools].GUID.ToString().Replace('-', '_');
   static [bool] $useDebug = (Get-Variable DebugPreference -ValueOnly) -eq 'Continue'
-  [System.Security.Cryptography.X509Certificates.X509Certificate2] $Cert
+  hidden [System.Security.Cryptography.X509Certificates.X509Certificate2] $Cert
   EnvTools() {}
   static [void] refreshEnv() { [EnvTools]::refreshEnv([ctxOption]::None) }
   static [void] refreshEnv([ctxOption]$ctxOption) {
@@ -460,16 +460,33 @@ class EnvTools {
     [System.Environment]::SetEnvironmentVariable("$sessionId", $((Get-Credential -Message "Enter your Pfx Password" -Title "-----[[ PFX Password ]]-----" -UserName $env:username).GetNetworkCredential().SecurePassword | ConvertFrom-SecureString), [EnvironmentVariableTarget]::Process)
   }
   static [System.Security.Cryptography.X509Certificates.X509Certificate2] CreateSelfSignedCertificate([UserConfig]$UserCfg, [string]$sessionId) {
-    [EnvTools]::SetSessionCreds([guid]$sessionId)
-    $X509VarName = "X509CertHelper_class_$([EnvTools]::VarName_Suffix)";
-    if (!$(Get-Variable $X509VarName -ValueOnly -Scope script -ErrorAction Ignore)) {
-      Write-Verbose "Fetching X509CertHelper class (One-time only)" -Verbose;
-      Set-Variable -Name $X509VarName -Scope script -Option ReadOnly -Value ([scriptblock]::Create($((Invoke-RestMethod -Method Get https://api.github.com/gists/d8f277f1d830882c4927c144a99b70cd).files.'X509CertHelper.ps1'.content)));
-    }
-    $X509CertHelper_class = Get-Variable $X509VarName -ValueOnly -Scope script
-    if ($X509CertHelper_class) { . $X509CertHelper_class; [EnvTools]::X509CertHelper = New-Object X509CertHelper }
+    [EnvTools]::SetSessionCreds([guid]$sessionId); [void][EnvTools]::GetX509CertHelper();
     $Password = [System.Environment]::GetEnvironmentVariable($sessionId) | ConvertTo-SecureString
     return [EnvTools]::X509CertHelper::CreateSelfSignedCertificate("CN=$($UserCfg.UserName)", $UserCfg.cert.Private, $Password, 2048, [System.DateTimeOffset]::Now.AddDays(-1).DateTime, [System.DateTimeOffset]::Now.AddDays($UserCfg.ExpiryDays).DateTime)
+  }
+  static [Object] GetX509CertHelper() {
+    $scriptNme = "X509CertHelper"; $X509VarName = "${scriptNme}_class_$([EnvTools]::VarName_Suffix)";
+    if (!$(Get-Variable $X509VarName -ValueOnly -Scope script -ErrorAction Ignore)) {
+      try {
+        [bool]$Installed = $null -ne (Get-InstalledScript -Name $scriptNme -Verbose:$false -ErrorAction Ignore)[0]
+        if (!$Installed) {
+          Write-Host "Installing script $scriptNme" -f Green
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted -Verbose:$false; Install-Script -Name $scriptNme -Verbose:$false
+        } else {
+          Write-Host "Script $scriptNme already installed" -f Green
+        }
+        $Private:XscrContent = ([IO.File]::ReadAllText([IO.Path]::Combine((Get-InstalledScript -Name $scriptNme).InstalledLocation, "$scriptNme.ps1")));
+        Set-Variable -Name $X509VarName -Scope script -Option ReadOnly -Value ([scriptblock]::Create("$XscrContent"));
+      } catch {
+        Write-Error "Unexpected error occurred: $($_.Exception); $($_.ScriptStackTrace)"
+        Write-Host " Using fallback gists ..." -f Green
+        Set-Variable -Name $X509VarName -Scope script -Option ReadOnly -Value ([scriptblock]::Create($((Invoke-RestMethod -Method Get https://api.github.com/gists/d8f277f1d830882c4927c144a99b70cd).files."$scriptNme.ps1".content)))
+      }
+    }
+    $X509 = Get-Variable $X509VarName -ValueOnly -Scope script
+    if ($X509) { . $X509; [EnvTools]::X509CertHelper = New-Object X509CertHelper }
+    return [EnvTools]::X509CertHelper
   }
   static hidden [void] Resolve_modules([string[]]$Names) {
     $varName = "resolver_script_$([EnvTools]::VarName_Suffix)";
@@ -507,7 +524,7 @@ class EnvTools {
 #endregion classes
 
 #region functions
-function Set-dotEnvConfig {
+function Set-EnvConfig {
   # .SYNOPSIS
   #     Supposed to run on-time, during module initial setup. It prepares Credentials to use when securing environment variables on local machine.
   # .DESCRIPTION
@@ -529,7 +546,7 @@ function Set-dotEnvConfig {
   process {
     if ($PSCmdlet.ShouldProcess("Localhost", "Initialize dotEnv")) {
       # do stuff here
-      # Write-Host "Hello from Private/dotEnv.Config/Set-dotEnvConfig" -f Green
+      # Write-Host "Hello from Private/cliHelper.env.Config/Set-dotEnvConfig" -f Green
       # [EnvTools]::config.Set("Path", (CryptoBase)::GetUnResolvedPath([IO.Path]::Combine([EnvTools]::DataPath, "Config.enc")))
     }
   }
@@ -559,7 +576,7 @@ function Resolve-FilePath {
   #         eg: Resolve-FilePath ModuleX.ps1 will return ./.env instead of ./BuildOutput/module/0.1.0/.env
   #             Unless ./.env doesn't exist; In that case it will Recursively search for other Names in the repo.
   # .LINK
-  #     https://github.com/alainQtec/dotEnv/blob/main/Private/dotEnv.Utils/dotEnv.Utils.psm1
+  #     https://github.com/alainQtec/cliHelper.env/blob/main/Private/cliHelper.env.Utils/cliHelper.env.Utils.psm1
   #
   [CmdletBinding(DefaultParameterSetName = 'Query')]
   [OutputType([System.Object[]])]

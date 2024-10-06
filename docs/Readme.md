@@ -56,7 +56,7 @@ When you want to test stuff before pushing to remote.
 
 ```PowerShell
 Write-Host "[+] Test Module Import ..." -f Green
-[IO.Path]::Combine((Split-Path $MyInvocation.MyCommand.Path),"dotEnv.psm1") | Import-Module
+[IO.Path]::Combine((Split-Path $MyInvocation.MyCommand.Path),"cliHelper.env.psm1") | Import-Module
 Write-Host "    Done." -f DarkGreen
 # Do other stuff with the module ...
 ```
@@ -77,12 +77,50 @@ module.</summary>
 
 ⤷ **Run the build script and tests.**
 
+set the following as your `build.ps1` script
+
+```PowerShell
+[cmdletbinding(DefaultParameterSetName = 'task')]
+param(
+  [parameter(Position = 0, ParameterSetName = 'task')]
+  [ValidateScript({
+      $task_seq = [string[]]$_; $IsValid = $true
+      $Tasks = @('Init', 'Clean', 'Compile', 'Import', 'Test', 'Deploy')
+      foreach ($name in $task_seq) {
+        $IsValid = $IsValid -and ($name -in $Tasks)
+      }
+      if ($IsValid) {
+        return $true
+      } else {
+        throw [System.ArgumentException]::new('Task', "ValidSet: $($Tasks -join ', ').")
+      }
+    }
+  )][ValidateNotNullOrEmpty()]
+  [string[]]$Task = @('Init', 'Clean', 'Compile', 'Import'),
+
+  [parameter(ParameterSetName = 'help')]
+  [Alias('-Help')]
+  [switch]$Help
+)
+
+Import-Module cliHelper.env
+Build-Module -Task $Task
+```
+
+then run
+
 ```PowerShell
 build.ps1 -Task test
 ```
 
 If tests (Intergration, Freature and module tests) pass, then create your pull
 request.
+
+Deploying:
+
+```PowerShell
+./build.ps1 -Task Deploy
+```
 
 </details>
 

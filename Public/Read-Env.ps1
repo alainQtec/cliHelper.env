@@ -2,7 +2,7 @@
   # .SYNOPSIS
   #   Reads environment Variable(s) from a .env file.
   # .LINK
-  #   https://github.com/alainQtec/dotEnv/Public/Read-Env.ps1
+  #   https://github.com/alainQtec/cliHelper.env/Public/Read-Env.ps1
   # .EXAMPLE
   #   Read-Env ./.env
   # .EXAMPLE

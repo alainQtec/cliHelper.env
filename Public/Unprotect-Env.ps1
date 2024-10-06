@@ -11,7 +11,7 @@
   # .LINK
   #   Initialize-EnvConfig
   # .LINK
-  #   https://github.com/alainQtec/dotEnv/Public/Unprotect-Env.ps1
+  #   https://github.com/alainQtec/cliHelper.env/Public/Unprotect-Env.ps1
   # .EXAMPLE
   #   Unprotect-Env NEXT_PUBLIC_SUPER_SECRET_KEY
   #   Explanation of the function or its result. You can include multiple examples with additional .EXAMPLE lines

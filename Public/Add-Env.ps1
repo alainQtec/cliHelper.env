@@ -9,7 +9,7 @@ function Add-Env {
   #     **NOTE:** Administrative Access Required when using `-Scope 'Machine'.`  On windows
   #     You can check in C:\Windows\System32\SystemPropertiesAdvanced.exe to see if it took effect.
   # .LINK
-  #     https://github.com/alainQtec/dotEnv/Public/Add-Env.ps1
+  #     https://github.com/alainQtec/cliHelper.env/Public/Add-Env.ps1
   #
   [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'session')]
   [OutputType([void])]

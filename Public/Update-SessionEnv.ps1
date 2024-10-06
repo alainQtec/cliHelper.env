@@ -21,7 +21,7 @@ function Update-SessionEnv {
   # .EXAMPLE
   #   Update-SessionEnv
   # .LINK
-  #   https://github.com/alainQtec/dotEnv/public/Update-SessionEnv.ps1
+  #   https://github.com/alainQtec/cliHelper.env/public/Update-SessionEnv.ps1
   #
   [CmdletBinding(SupportsShouldProcess = $true)]
   [Alias('refreshEnv')]

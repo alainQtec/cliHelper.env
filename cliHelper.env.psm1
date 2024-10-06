@@ -1,14 +1,16 @@
 #!/usr/bin/env pwsh
 using namespace System.Management.Automation.Language
-using module Private/dotEnv.Crypto/dotEnv.Crypto.psm1
-using module Private/dotEnv.Utils/dotEnv.Utils.psm1
+using module Private/cliHelper.env.Utils/cliHelper.env.Utils.psm1
+using module Private/cliHelper.env.Crypto/cliHelper.env.Crypto.psm1
 
 #region    Classes
 #Requires -Version 7
 # .SYNOPSIS
 #  Module main class
 class dotEnv : EnvTools {
-  dotEnv() { [dotEnv]::SetEnvFile() }
+  dotEnv() {
+    [dotEnv]::SetEnvFile(); Set-EnvConfig
+  }
   static [string] Get([string]$key) {
     [ValidateNotNullOrEmpty()][string]$key = $key
     return [dotEnv]::Read([dotEnv].EnvFile).Where({ $_.Name -eq $key }).Value
@@ -135,33 +137,17 @@ class dotEnv : EnvTools {
 #region typeAccelerators
 # Types that will be available to users when they import the module.
 $typestoExport = @(
-  [dotEnv],
-  [UserConfig],
-  [ProjectConfig]
+  [dotEnv]
 )
-$TypeAcceleratorsClass = [psobject].Assembly.GetType('System.Management.Automation.TypeAccelerators')
+$TypeAcceleratorsClass = [psobject].Assembly.GetType('System.Management.Automation.TypeAccelerators'); $addedtypes = @()
 foreach ($Type in $typestoExport) {
-  if ($Type.FullName -in $TypeAcceleratorsClass::Get.Keys) {
-    $Message = @(
-      "Unable to register type accelerator '$($Type.FullName)'"
-      'Accelerator already exists.'
-    ) -join ' - '
-
-    throw [System.Management.Automation.ErrorRecord]::new(
-      [System.InvalidOperationException]::new($Message),
-      'TypeAcceleratorAlreadyExists',
-      [System.Management.Automation.ErrorCategory]::InvalidOperation,
-      $Type.FullName
-    )
+  if ($Type.FullName -notin $TypeAcceleratorsClass::Get.Keys) {
+    $TypeAcceleratorsClass::Add($Type.FullName, $Type); $addedtypes += $Type
   }
-}
-# Add type accelerators for every exportable type.
-foreach ($Type in $typestoExport) {
-  $TypeAcceleratorsClass::Add($Type.FullName, $Type)
 }
 # Remove type accelerators when the module is removed.
 $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
-  foreach ($Type in $typestoExport) {
+  foreach ($Type in $addedtypes) {
     $TypeAcceleratorsClass::Remove($Type.FullName)
   }
 }.GetNewClosure();

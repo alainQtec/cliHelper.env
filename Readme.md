@@ -1,4 +1,4 @@
-# [dotEnv](dotEnv)
+# [cliHelper.env](dotEnv)
 
 A module for reading and editing `.env` values. & has
 [`extra security`](/docs/Readme.md#security-best-practices) cmdlets.
@@ -6,7 +6,7 @@ A module for reading and editing `.env` values. & has
 ## install
 
 ```PowerShell
-Install-Module dotEnv
+Install-Module cliHelper.env
 ```
 
 ## usage
@@ -23,7 +23,7 @@ temitope1909.dotenv-intellisense
   Environment variables can be easily accessed by anyone who has access to the
   system. This can lead to security breaches if sensitive information is stored
   in environment variables. This module has cmdlets to create
-  [encrypted Enviromment variables](https://github.com/alainQtec/dotEnv/wiki#enc)
+  [encrypted Enviromment variables](https://github.com/alainQtec/cliHelper.env/wiki#enc)
 
 - **Debugging**:
 
@@ -40,7 +40,7 @@ example:
 
 ```PowerShell
 # Import the module
-Import-Module dotEnv
+Import-Module cliHelper.env
 
 # sick usage examples go here ...
 ```
@@ -48,7 +48,7 @@ Import-Module dotEnv
 ## TODOs
 
 - [ ] Complete Protect-Env & UnProtect-Env
-- [ ] Update build script
+- [x] Update build script
 - [ ] Add fancy cli. ex animations, progressbar & logging
 - [ ] Add tests
 - [ ] Add zstandard compression
