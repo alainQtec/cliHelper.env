@@ -468,20 +468,17 @@ class EnvTools {
     $scriptNme = "X509CertHelper"; $X509VarName = "${scriptNme}_class_$([EnvTools]::VarName_Suffix)";
     if (!$(Get-Variable $X509VarName -ValueOnly -Scope script -ErrorAction Ignore)) {
       try {
-        [bool]$Installed = $null -ne (Get-InstalledScript -Name $scriptNme -Verbose:$false -ErrorAction Ignore)[0]
-        if (!$Installed) {
-          Write-Host "Installing script $scriptNme" -f Green
+        if ($env:CI -eq "true" -and $env:GITHUB_RUN_ID) {
+          Set-Variable -Name $X509VarName -Scope script -Option ReadOnly -Value ([scriptblock]::Create($((Invoke-RestMethod -Method Get https://api.github.com/gists/d8f277f1d830882c4927c144a99b70cd).files."$scriptNme.ps1".content)))
+        } elseif ($null -eq (Get-InstalledScript -Name $scriptNme -Verbose:$false -ErrorAction Ignore)[0]) {
+          Write-Host "[+] Installing script $scriptNme" -f Green
           [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
           Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted -Verbose:$false; Install-Script -Name $scriptNme -Verbose:$false
-        } else {
-          Write-Host "Script $scriptNme already installed" -f Green
+          $Private:XscrContent = ([IO.File]::ReadAllText([IO.Path]::Combine((Get-InstalledScript -Name $scriptNme).InstalledLocation, "$scriptNme.ps1")));
+          Set-Variable -Name $X509VarName -Scope script -Option ReadOnly -Value ([scriptblock]::Create("$XscrContent"));
         }
-        $Private:XscrContent = ([IO.File]::ReadAllText([IO.Path]::Combine((Get-InstalledScript -Name $scriptNme).InstalledLocation, "$scriptNme.ps1")));
-        Set-Variable -Name $X509VarName -Scope script -Option ReadOnly -Value ([scriptblock]::Create("$XscrContent"));
       } catch {
         Write-Error "Unexpected error occurred: $($_.Exception); $($_.ScriptStackTrace)"
-        Write-Host " Using fallback gists ..." -f Green
-        Set-Variable -Name $X509VarName -Scope script -Option ReadOnly -Value ([scriptblock]::Create($((Invoke-RestMethod -Method Get https://api.github.com/gists/d8f277f1d830882c4927c144a99b70cd).files."$scriptNme.ps1".content)))
       }
     }
     $X509 = Get-Variable $X509VarName -ValueOnly -Scope script

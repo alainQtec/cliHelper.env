@@ -99,7 +99,7 @@ Begin {
       } -description 'Initialize build environment'
       Task -name clean -depends Init {
         $Host.UI.WriteLine()
-        $modules = Get-Module -name $ProjectName -ListAvailable -ErrorAction Ignore
+        $modules = Get-Module -Name $ProjectName -ListAvailable -ErrorAction Ignore
         $modules | Remove-Module -Force; $modules | Uninstall-Module -ErrorAction Ignore -Force
         Remove-Module $ProjectName -Force -ErrorAction SilentlyContinue
         if (Test-Path -Path $outputDir -PathType Container -ErrorAction SilentlyContinue) {
@@ -208,28 +208,28 @@ Begin {
               $null
               break
             }
-                        ($commitVer -and ([System.Version]$commitVer -gt $nextGalVer)) {
+            $($commitVer -and ([System.Version]$commitVer -gt $nextGalVer)) {
               Write-Host -ForegroundColor Green "Module Bumped version: $commitVer [from commit message]"
               [System.Version]$commitVer
               break
             }
-                        ($CurrentVersion -ge $nextGalVer) {
+            $($CurrentVersion -ge $nextGalVer) {
               Write-Host -ForegroundColor Green "Module Bumped version: $CurrentVersion [from manifest]"
               $CurrentVersion
               break
             }
-                        ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!hotfix') {
+            $(([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!hotfix') {
               Write-Host -ForegroundColor Green "Module Bumped version: $nextGalVer [commit message match '!hotfix']"
               $nextGalVer
               break
             }
-                        ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!minor') {
+            $(([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!minor') {
               $minorVers = [System.Version]("{0}.{1}.{2}" -f $nextGalVer.Major, ([int]$nextGalVer.Minor + 1), 0)
               Write-Host -ForegroundColor Green "Module Bumped version: $minorVers [commit message match '!minor']"
               $minorVers
               break
             }
-                        ($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!major') {
+            $(([Environment]::GetEnvironmentVariable($env:RUN_ID + 'CommitMessage')) -match '!major') {
               $majorVers = [System.Version]("{0}.{1}.{2}" -f ([int]$nextGalVer.Major + 1), 0, 0)
               Write-Host -ForegroundColor Green "Module Bumped version: $majorVers [commit message match '!major']"
               $majorVers
