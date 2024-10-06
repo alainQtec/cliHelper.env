@@ -19,7 +19,7 @@ class dotEnv : EnvTools {
     [ValidateNotNullOrEmpty()][string]$EnvFile = $(Resolve-Path $EnvFile -ea Ignore).Path
     $res_Obj = @(); $content = [IO.File]::ReadAllLines($EnvFile)
     if ([string]::IsNullOrWhiteSpace($content)) {
-      [dotEnv]::Log("The .env file is empty!");
+      Write-Debug "The .env file is empty!"
       return $res_Obj
     }
     foreach ($line in $content) {
@@ -40,10 +40,10 @@ class dotEnv : EnvTools {
     }
     return $res_Obj
   }
-  static [void] Update([IO.File]$EnvFile, [string]$Name, [string]$Value) {
+  static [void] Update([IO.FileInfo]$EnvFile, [string]$Name, [string]$Value) {
     [dotEnv]::Update($EnvFile, $Name, $Value, $false)
   }
-  static [void] Update([IO.File]$EnvFile, [string]$Name, [string]$Value, [bool]$StripComments) {
+  static [void] Update([IO.FileInfo]$EnvFile, [string]$Name, [string]$Value, [bool]$StripComments) {
     $Entries = [dotenv]::Read($EnvFile.FullName);
     if ($StripComments) {
       [IO.File]::WriteAllText($EnvFile,
@@ -60,7 +60,9 @@ class dotEnv : EnvTools {
         $updatedContent = $sb.ToString() -replace $pa, $re
         [IO.File]::WriteAllText($EnvFile.FullName, $updatedContent)
       } else {
-        throw [System.Exception]::new("key: $Name not found.")
+        Write-Debug "key $Name was not found. Addind new one ..."
+        $Entries += [dotEntry]::new($Name, $Value, "Assign")
+        [IO.File]::WriteAllText($EnvFile.FullName, $($Entries.ForEach({ $_.ToString() }) | Out-String))
       }
     }
   }
