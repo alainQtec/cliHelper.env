@@ -288,8 +288,8 @@ class vars {
 }
 
 class EnvTools {
+  static $X509CertHelper
   static [vars] $vars = [vars]::new()
-  static $X509CertHelper = [EnvTools]::GetX509CertHelper()
   static [EnvCfg] $config = [EnvCfg]::new(@{User = [UserConfig]::new(); Project = [ProjectConfig]::new() })
   Static [IO.DirectoryInfo] $DataPath = (Get-DataPath 'dotEnv' 'Data')
   static hidden [string]$VarName_Suffix = [EnvTools].GUID.ToString().Replace('-', '_');
