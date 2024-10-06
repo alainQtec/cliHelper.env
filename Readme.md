@@ -50,7 +50,7 @@ Import-Module cliHelper.env
 - [ ] Complete Protect-Env & UnProtect-Env
 - [x] Update build script
 - [ ] Add fancy cli. ex animations, progressbar & logging
-- [ ] Add tests
+- [x] Add tests
 - [ ] Add zstandard compression
 - [ ] complete the docs
 
