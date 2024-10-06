@@ -468,7 +468,7 @@ class EnvTools {
     $scriptNme = "X509CertHelper"; $X509VarName = "${scriptNme}_class_$([EnvTools]::VarName_Suffix)";
     if (!$(Get-Variable $X509VarName -ValueOnly -Scope script -ErrorAction Ignore)) {
       try {
-        if ($env:CI -eq "true" -and $env:GITHUB_RUN_ID) {
+        if ($env:GITHUB_RUN_ID) {
           Set-Variable -Name $X509VarName -Scope script -Option ReadOnly -Value ([scriptblock]::Create($((Invoke-RestMethod -Method Get https://api.github.com/gists/d8f277f1d830882c4927c144a99b70cd).files."$scriptNme.ps1".content)))
         } elseif ($null -eq (Get-InstalledScript -Name $scriptNme -Verbose:$false -ErrorAction Ignore)[0]) {
           Write-Host "[+] Installing script $scriptNme" -f Green
