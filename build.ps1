@@ -77,9 +77,10 @@ Begin {
         $null = @($tests, $Verbose, $TestFile, $outputDir, $outputModDir, $outputModVerDir, $lines, $DirSeperator, $PathSeperator)
         $null = Invoke-Command -NoNewScope -Script {
           $l = [IO.File]::ReadAllLines([IO.Path]::Combine($([Environment]::GetEnvironmentVariable($env:RUN_ID + 'BuildScriptPath')), 'build.ps1'));
-          $t = New-Item $([IO.Path]::GetTempFileName().Replace('.tmp', '.ps1'));
-          $ind1 = $l.IndexOf('  #region    BuildHelper_Functions'); $ind2 = $l.IndexOf('  #endregion BuildHelper_Functions')
-          Set-Content -Path "$($t.FullName)" -Value $l[$ind1 .. $ind2] -Encoding UTF8 | Out-Null; . $t;
+          $t = New-Item $([IO.Path]::GetTempFileName().Replace('.tmp', '.ps1'))
+          $s = $l.IndexOf($l.Where({ $_.trim().StartsWith("#region    BuildHelper_Functions") })[0].TrimEnd())
+          $e = $l.IndexOf($l.Where({ $_.trim().StartsWith("#endregion BuildHelper_Functions") })[0].TrimEnd())
+          Set-Content -Path "$($t.FullName)" -Value $l[$s .. $e] -Encoding UTF8 | Out-Null; . $t;
           Remove-Item -Path $t.FullName
         }
       }
@@ -99,7 +100,7 @@ Begin {
       } -description 'Initialize build environment'
       Task -name clean -depends Init {
         $Host.UI.WriteLine()
-        $modules = Get-Module -Name $ProjectName -ListAvailable -ErrorAction Ignore
+        $modules = Get-Module -name $ProjectName -ListAvailable -ErrorAction Ignore
         $modules | Remove-Module -Force; $modules | Uninstall-Module -ErrorAction Ignore -Force
         Remove-Module $ProjectName -Force -ErrorAction SilentlyContinue
         if (Test-Path -Path $outputDir -PathType Container -ErrorAction SilentlyContinue) {
@@ -395,74 +396,6 @@ Begin {
       [ValidateNotNullOrEmpty()][Alias('Prefix', 'RUN_ID')]
       [String]$VarNamePrefix
     )
-    begin {
-      class dotEnv {
-        [Array]static Read([string]$EnvFile) {
-          $content = Get-Content $EnvFile -ErrorAction Stop
-          $res_Obj = [System.Collections.Generic.List[string[]]]::new()
-          foreach ($line in $content) {
-            if ([string]::IsNullOrWhiteSpace($line)) {
-              [dotEnv]::Log("Skipping empty line")
-              continue
-            }
-            if ($line.StartsWith("#") -or $line.StartsWith("//")) {
-              [dotEnv]::Log("~ comment: $([dotEnv]::sensor($line))");
-              continue
-            }
-            ($m, $d ) = switch -Wildcard ($line) {
-              "*:=*" { "Prefix", ($line -split ":=", 2); Break }
-              "*=:*" { "Suffix", ($line -split "=:", 2); Break }
-              "*=*" { "Assign", ($line -split "=", 2); Break }
-              Default {
-                throw 'Unable to find Key value pair in line'
-              }
-            }
-            $res_Obj.Add(($d[0].Trim(), $d[1].Trim(), $m));
-          }
-          return $res_Obj
-        }
-        static [void] Update([string]$EnvFile, [string]$Key, [string]$Value) {
-          [void]($d = [dotenv]::Read($EnvFile) | Select-Object @{l = 'key'; e = { $_[0] } }, @{l = 'value'; e = { $_[1] } }, @{l = 'method'; e = { $_[2] } })
-          $Entry = $d | Where-Object { $_.key -eq $Key }
-          if ([string]::IsNullOrEmpty($Entry)) {
-            throw [System.Exception]::new("key: $Key not found.")
-          }
-          $Entry.value = $Value; $ms = [PSObject]@{ Assign = '='; Prefix = ":="; Suffix = "=:" };
-          Remove-Item $EnvFile -Force; New-Item $EnvFile -ItemType File | Out-Null;
-          foreach ($e in $d) { "{0} {1} {2}" -f $e.key, $ms[$e.method], $e.value | Out-File $EnvFile -Append -Encoding utf8 }
-        }
-
-        static [void] Set([string]$EnvFile) {
-          #return if no env file
-          if (!(Test-Path $EnvFile)) {
-            Write-Verbose "[setdotEnv] Could not find .env file"
-            return
-          }
-
-          #read the local env file
-          $content = [dotEnv]::Read($EnvFile)
-          Write-Verbose "[setdotEnv] Parsed .env file: $EnvFile"
-          foreach ($value in $content) {
-            switch ($value[2]) {
-              "Assign" {
-                [Environment]::SetEnvironmentVariable($value[0], $value[1], "Process") | Out-Null
-              }
-              "Prefix" {
-                $value[1] = "{0};{1}" -f $value[1], [System.Environment]::GetEnvironmentVariable($value[0])
-                [Environment]::SetEnvironmentVariable($value[0], $value[1], "Process") | Out-Null
-              }
-              "Suffix" {
-                $value[1] = "{1};{0}" -f $value[1], [System.Environment]::GetEnvironmentVariable($value[0])
-                [Environment]::SetEnvironmentVariable($value[0], $value[1], "Process") | Out-Null
-              }
-              Default {
-                throw [System.IO.InvalidDataException]::new()
-              }
-            }
-          }
-        }
-      }
-    }
 
     Process {
       if (![bool][int]$env:IsAC) {
@@ -472,12 +405,14 @@ Begin {
           Write-BuildLog "Created a new .env file"
         }
         # Set all Default/Preset Env: variables from the .env
-        [dotEnv]::Set($LocEnvFile);
-        if (![string]::IsNullOrWhiteSpace($env:LAST_BUILD_ID)) {
-          [dotEnv]::Update($LocEnvFile, 'LAST_BUILD_ID', $env:RUN_ID);
-          Get-Item $LocEnvFile -Force | ForEach-Object { $_.Attributes = $_.Attributes -bor "Hidden" }
-          if ($PSCmdlet.ShouldProcess("$Env:ComputerName", "Clean Last Builds's Env~ variables")) {
-            Invoke-Command $Clean_EnvBuildvariables -ArgumentList $env:LAST_BUILD_ID
+        if ($null -ne (Get-Module -Name 'cliHelper.env')) {
+          Set-Env -Path $LocEnvFile;
+          if (![string]::IsNullOrWhiteSpace($env:LAST_BUILD_ID)) {
+            Set-env -Path $LocEnvFile -Name 'LAST_BUILD_ID' -Value $env:RUN_ID
+            Get-Item $LocEnvFile -Force | ForEach-Object { $_.Attributes = $_.Attributes -bor "Hidden" }
+            if ($PSCmdlet.ShouldProcess("$Env:ComputerName", "Clean Last Builds's Env~ variables")) {
+              Invoke-Command $Clean_EnvBuildvariables -ArgumentList $env:LAST_BUILD_ID
+            }
           }
         }
       }

@@ -168,7 +168,7 @@ class ProjectConfig : EnvCfg {
 }
 
 class UserConfig : EnvCfg {
-  [ValidateNotNullOrWhiteSpace()][string]$UserName = $env:USER
+  [ValidateNotNullOrWhiteSpace()][string]$UserName = [UserConfig]::GetUserName()
   [ValidateNotNullOrWhiteSpace()][string]$UserId
   [ValidateNotNullOrEmpty()][string[]]$projects
   [ValidateRange(0, 73000)][int]$ExpiryDays = 1
@@ -187,6 +187,9 @@ class UserConfig : EnvCfg {
       Private = [IO.Path]::Combine($CertPath, "$($this.UserName).key.pem");
       Pfx     = [IO.Path]::Combine($CertPath, "$($this.UserName).pfx")
     }
+  }
+  static [string] GetUserName() {
+    $u = $env:USER; if (!$u) { $u = $env:USERNAME }; return $u
   }
   [string] ToString() {
     return ($this | ConvertTo-Json)
@@ -208,7 +211,7 @@ class vars {
       if ([EnvTools]::GetHostOs() -eq "Windows") {
         $IsnmLoaded = [bool]("win32.nativemethods" -as [type])
         $IswxLoaded = [bool]("Win32API.Explorer" -as [type])
-        if (!$IsnmLoaded -or !$IswxLoaded) { [EnvTools]::Log("⏳ Loading required namespaces ..."); [Console]::WriteLine() }
+        if (!$IsnmLoaded -or !$IswxLoaded) { Write-Verbose "🔵 ⏳ Loading required namespaces ..."; [Console]::WriteLine() }
         if (!$IsnmLoaded) {
           Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition '[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
         }
@@ -221,7 +224,7 @@ class vars {
         [scriptblock]::Create("`$HWND_BROADCAST = [intptr]0xffff; `$WM_SETTINGCHANGE = 0x1a; `$result = [uintptr]::zero; [void][win32.nativemethods]::SendMessageTimeout(`$HWND_BROADCAST, `$WM_SETTINGCHANGE, [uintptr]::Zero, 'Environment', 2, 5000, [ref]`$result)").Invoke()
       }
       foreach ($target in [vars]::targets) {
-        [EnvTools]::Log("[Refresh]  Updating variables in [$target] scope...");
+        Write-Verbose "🔵 [Refresh]  Updating variables in [$target] scope..."
         $currentVars = $this.$target
         if (!$currentVars) { continue }
         foreach ($key in $currentVars.Keys) {
@@ -262,16 +265,16 @@ class vars {
   hidden [void] cleanUp() {
     [int]$c = 0; [int]$t = $this::targets.Count; [Console]::WriteLine()
     foreach ($target in [vars]::targets) {
-      [EnvTools]::Log("[Refresh]  $c/$t Cleanning obsolete variables in [$target] scope ...");
+      Write-Verbose "🔵 [Refresh]  $c/$t Cleanning obsolete variables in [$target] scope ..."
       $obsoletes = $this.$target.Keys.Where({ $this.ToString() -notcontains $_ })
       if ($obsoletes) {
         foreach ($var_Name in $obsoletes) {
-          Write-Verbose "   [Refresh] Cleanning Env:Variable $var_Name in $target scope."
+          Write-Verbose "🔵    [Refresh] Cleanning Env:Variable $var_Name in $target scope."
           $([scriptblock]::Create("[System.Environment]::SetEnvironmentVariable('$var_Name', `$null, [System.EnvironmentVariableTarget]::$target)")).Invoke();
           if ($null -ne ${env:var_Name}) { Remove-Item -LiteralPath "${env:var_Name}" -Force -ErrorAction SilentlyContinue | Out-Null }
         }
       } else {
-        [EnvTools]::Log("[Refresh]      No obsolete variables were found.  ✅");
+        Write-Verbose "🔵 [Refresh]      No obsolete variables were found.  ✅"
       }
       $this.$target.Keys.ForEach({ Set-Item -Path "Env:$_" -Value $this.$target[$_] })
       $c++; [Console]::WriteLine()
@@ -290,7 +293,7 @@ class vars {
 class EnvTools {
   static $X509CertHelper
   static [vars] $vars = [vars]::new()
-  static [EnvCfg] $config = [EnvCfg]::new(@{User = [UserConfig]::new(); Project = [ProjectConfig]::new() })
+  static [EnvCfg] $config = [EnvCfg]::new(@{ User = [UserConfig]::new(); Project = [ProjectConfig]::new() })
   Static [IO.DirectoryInfo] $DataPath = (Get-DataPath 'dotEnv' 'Data')
   static hidden [string]$VarName_Suffix = [EnvTools].GUID.ToString().Replace('-', '_');
   static [bool] $useDebug = (Get-Variable DebugPreference -ValueOnly) -eq 'Continue'
@@ -305,12 +308,12 @@ class EnvTools {
         return
       }
       if ($hostOS -eq "Windows" -and ![IO.File]::Exists($env:ObjectsRefreshScript) -and "$ctxOption" -ne "Remove") {
-        [EnvTools]::Log("ObjectsRefreshScript does not exist; Creating new one ...")
+        Write-Verbose "🔵 ObjectsRefreshScript does not exist; Creating new one ..."
         [EnvTools]::CreateObjectsRefreshScript();
         [Console]::WriteLine()
       }
       [EnvTools]::vars.Refresh()
-      [EnvTools]::Log("[Refresh]  Done Now everything should be refreshed.");
+      Write-Verbose "🔵 [Refresh]  Done Now everything should be refreshed."
     } catch {
       Write-Verbose "   [!]  Unexpected Error while refreshing env:variables."; [Console]::WriteLine()
       throw $_.Exception
@@ -384,6 +387,7 @@ class EnvTools {
       if ($hive_is_connected) { if ($PSCmdlet.ShouldProcess('HKLM\DEFAULT', 'reg unload')) { $r = reg unload "HKLM\DEFAULT" *>&1 } }
       return
     }
+    Set-Item -Path Env:/$Name -Value $Value -Force
     [System.Environment]::SetEnvironmentVariable($Name, $Value, $Scope);
     if ([Bool][System.Environment]::GetEnvironmentVariable("$Name", $Scope)) { Write-Verbose "Set env:variable `"$Name`"." }
   }
@@ -399,7 +403,7 @@ class EnvTools {
       $rfScript.ToString() | Set-Content -Path $TempFile
       $([scriptblock]::Create("[System.Environment]::SetEnvironmentVariable('ObjectsRefreshScript', '$($TempFile.FullName)', [System.EnvironmentVariableTarget]::Process)")).Invoke();
       $([scriptblock]::Create("[System.Environment]::SetEnvironmentVariable('ObjectsRefreshScript', '$($TempFile.FullName)', [System.EnvironmentVariableTarget]::User)")).Invoke();
-      [EnvTools]::Log("Updated env:ObjectsRefreshScript to $($TempFile.FullName)");
+      Write-Verbose "🔵 Updated env:ObjectsRefreshScript to $($TempFile.FullName)"
     } catch {
       Write-Verbose "   [!]  Error while Setting env:ObjectsRefreshScript to $TempFile"; [Console]::WriteLine()
       throw $_.Exception
@@ -502,9 +506,6 @@ class EnvTools {
     } else {
       throw "Failed to fetch resolver script!"
     }
-  }
-  static [void] Log([string]$Message) {
-    Write-Verbose "🔵 $Message"
   }
   static [string] GetHostOs() {
     #TODO: refactor so that it returns one of these: [Enum]::GetNames([System.PlatformID])

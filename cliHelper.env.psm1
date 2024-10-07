@@ -25,7 +25,7 @@ class dotEnv : EnvTools {
     foreach ($line in $content) {
       if ([string]::IsNullOrWhiteSpace($line)) { continue }
       if ($line.StartsWith("#") -or $line.StartsWith("//")) {
-        [dotEnv]::Log("~ comment: $([dotEnv]::sensor($line))");
+        Write-Verbose "🔵 ~ comment: $([dotEnv]::sensor($line))"
         continue
       }
       ($m, $d ) = switch -Wildcard ($line) {
