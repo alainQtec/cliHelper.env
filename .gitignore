@@ -403,6 +403,5 @@ Tests/cliHelper.env.Intergration.Tests.ps1
 Tests/Resources/Test-GitHubScript.ps1
 
 # others
+.r.tmp/
 /preBuild.ps1
-Private/.SECsc_tmp
-Private/.sp_tmp
