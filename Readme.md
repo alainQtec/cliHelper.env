@@ -1,7 +1,11 @@
-# [cliHelper.env](dotEnv)
+## [cliHelper.env](dotEnv)
+
+[result] by using [feature] for [whom]
 
 A module for reading and editing `.env` values. & has
 [`extra security`](/docs/Readme.md#security-best-practices) cmdlets.
+
+[![CI](https://github.com/alainQtec/cliHelper.env/actions/workflows/CI.yaml/badge.svg)](https://github.com/alainQtec/cliHelper.env/actions/workflows/CI.yaml)
 
 ## install
 
@@ -11,12 +15,25 @@ Install-Module cliHelper.env
 
 ## usage
 
-0-risk editing environment variables
+demo :
 
-<!--
-recomended vscode extensions
-temitope1909.dotenv-intellisense
- -->
+<!-- thumbnail : http://i.ytimg.com/vi/$Id/hqdefault.jpg -->
+<!-- ex: id is YuCyE8HiLTY in https://www.youtube.com/watch?v=YuCyE8HiLTY -->
+
+<div style="position: relative; width: 100%; padding-bottom: 56.25%">
+<iframe src="https://www.youtube.com/embed/jgEYn-ldr30"
+        title="Web Load Testing with West Wind WebSurge 2" frameborder="0" allowfullscreen
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        style="position: absolute; width: 100%; height: 100%; border-radius:15px;">
+</iframe>
+</div>
+</br>
+
+Notes:
+
+_Its recomended to use with vscode extensions temitope1909.dotenv-intellisense_
+
+0-risk editing environment variables
 
 - **Security**:
 
@@ -35,15 +52,6 @@ temitope1909.dotenv-intellisense
 
   Cmdlets are benchmarked during tests to make sure they will not slow down the
   system.
-
-example:
-
-```PowerShell
-# Import the module
-Import-Module cliHelper.env
-
-# sick usage examples go here ...
-```
 
 ## TODOs
 
