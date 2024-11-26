@@ -56,10 +56,24 @@ param(
   [switch]$Help
 )
 begin {
-  if (!(Get-Module PsCraft -ListAvailable -ErrorAction Ignore)) { Install-Module PsCraft -Verbose:$false };
-  $(Get-InstalledModule PsCraft -ErrorAction Ignore).InstalledLocation | Split-Path | Import-Module -Verbose:$false
+  function Register-PackageFeed ([switch]$ForceBootstrap) {
+    if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction Ignore)) {
+      Unregister-PSRepository -Name PSGallery -Verbose:$false -ErrorAction Ignore
+      Register-PSRepository -Default -InstallationPolicy Trusted
+    }
+    if ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne 'Trusted') {
+      Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -Verbose:$false
+    }
+    Get-PackageProvider -Name Nuget -ForceBootstrap:($ForceBootstrap.IsPresent) -Verbose:$false
+    if (!(Get-PackageProvider -Name Nuget)) {
+      Install-PackageProvider -Name NuGet -Force | Out-Null
+    }
+  }
 }
 process {
+  Register-PackageFeed -ForceBootstrap
+  if (!(Get-Module PsCraft -ListAvailable -ErrorAction Ignore)) { Install-Module PsCraft -Verbose:$false };
+  $(Get-InstalledModule PsCraft -ErrorAction Ignore).InstalledLocation | Split-Path | Import-Module -Verbose:$false
   if ($PSCmdlet.ParameterSetName -eq 'help') {
     Build-Module -Help
   } else {
