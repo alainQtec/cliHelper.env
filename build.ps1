@@ -1,4 +1,7 @@
-﻿<#
+﻿using namespace System
+using namespace System.IO
+using namespace System.Management.Automation
+<#
 .SYNOPSIS
     cliHelper.env buildScript
 .DESCRIPTION
@@ -16,10 +19,10 @@
 #>
 [cmdletbinding(DefaultParameterSetName = 'task')]
 param(
-  [parameter(Position = 0, ParameterSetName = 'task')]
+  [parameter(Mandatory = $false, Position = 0, ParameterSetName = 'task')]
   [ValidateScript({
       $task_seq = [string[]]$_; $IsValid = $true
-      $Tasks = @('Init', 'Clean', 'Compile', 'Test', 'Deploy')
+      $Tasks = @('Clean', 'Compile', 'Test', 'Deploy')
       foreach ($name in $task_seq) {
         $IsValid = $IsValid -and ($name -in $Tasks)
       }
@@ -30,22 +33,21 @@ param(
       }
     }
   )][ValidateNotNullOrEmpty()][Alias('t')]
-  [string[]]$Task = @('Init', 'Clean', 'Compile'),
+  [string[]]$Task = 'Test',
 
   # Module buildRoot
-  [Parameter(Mandatory = $false, ParameterSetName = 'task')]
+  [Parameter(Mandatory = $false, Position = 1, ParameterSetName = 'task')]
   [ValidateScript({
-      if (Test-Path -Path $_ -PathType Container -ErrorAction Ignore) {
+      if (Test-Path -Path $_ -PathType Container -ea Ignore) {
         return $true
       } else {
         throw [System.ArgumentException]::new('Path', "Path: $_ is not a valid directory.")
       }
     })][Alias('p')]
-  [string]$Path = (Get-Item -Path "." -Verbose:$false).FullName,
+  [string]$Path = (Resolve-Path .).Path,
 
   [Parameter(Mandatory = $false, ParameterSetName = 'task')]
-  [Alias('u')][ValidateNotNullOrWhiteSpace()]
-  [string]$gitUser = $env:USER,
+  [string[]]$RequiredModules = @(),
 
   [parameter(ParameterSetName = 'task')]
   [Alias('i')]
@@ -55,28 +57,13 @@ param(
   [Alias('h', '-help')]
   [switch]$Help
 )
+
 begin {
-  function Register-PackageFeed ([switch]$ForceBootstrap) {
-    if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction Ignore)) {
-      Unregister-PSRepository -Name PSGallery -Verbose:$false -ErrorAction Ignore
-      Register-PSRepository -Default -InstallationPolicy Trusted
-    }
-    if ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne 'Trusted') {
-      Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -Verbose:$false
-    }
-    Get-PackageProvider -Name Nuget -ForceBootstrap:($ForceBootstrap.IsPresent) -Verbose:$false
-    if (!(Get-PackageProvider -Name Nuget)) {
-      Install-PackageProvider -Name NuGet -Force | Out-Null
-    }
-  }
+  if ($PSCmdlet.ParameterSetName -eq 'help') { Get-Help $MyInvocation.MyCommand.Source -Full | Out-String | Write-Host -f Green; return }
+  $req = Invoke-WebRequest -Method Get -Uri https://raw.githubusercontent.com/alainQtec/PsCraft/refs/heads/main/Public/Build-Module.ps1 -SkipHttpErrorCheck
+  if ($req.StatusCode -ne 200) { throw "Failed to download Build-Module.ps1" }
+  . ([ScriptBlock]::Create("$($req.Content)"))
 }
 process {
-  Register-PackageFeed -ForceBootstrap
-  if (!(Get-Module PsCraft -ListAvailable -ErrorAction Ignore)) { Install-Module PsCraft -Verbose:$false };
-  $(Get-InstalledModule PsCraft -ErrorAction Ignore).InstalledLocation | Split-Path | Import-Module -Verbose:$false
-  if ($PSCmdlet.ParameterSetName -eq 'help') {
-    Build-Module -Help
-  } else {
-    Build-Module -Task $Task -Path $Path -gitUser $gitUser -Import:$Import
-  }
+  Build-Module -Task $Task -Path $Path -Import:$Import
 }
