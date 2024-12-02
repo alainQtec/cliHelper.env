@@ -141,24 +141,39 @@ class dotEnv : EnvTools {
 $typestoExport = @(
   [dotEnv]
 )
-$TypeAcceleratorsClass = [psobject].Assembly.GetType('System.Management.Automation.TypeAccelerators'); $addedtypes = @()
+$TypeAcceleratorsClass = [PsObject].Assembly.GetType('System.Management.Automation.TypeAccelerators')
 foreach ($Type in $typestoExport) {
-  if ($Type.FullName -notin $TypeAcceleratorsClass::Get.Keys) {
-    $TypeAcceleratorsClass::Add($Type.FullName, $Type); $addedtypes += $Type
+  if ($Type.FullName -in $TypeAcceleratorsClass::Get.Keys) {
+    $Message = @(
+      "Unable to register type accelerator '$($Type.FullName)'"
+      'Accelerator already exists.'
+    ) -join ' - '
+
+    [System.Management.Automation.ErrorRecord]::new(
+      [System.InvalidOperationException]::new($Message),
+      'TypeAcceleratorAlreadyExists',
+      [System.Management.Automation.ErrorCategory]::InvalidOperation,
+      $Type.FullName
+    ) | Write-Warning
   }
+}
+# Add type accelerators for every exportable type.
+foreach ($Type in $typestoExport) {
+  $TypeAcceleratorsClass::Add($Type.FullName, $Type)
 }
 # Remove type accelerators when the module is removed.
 $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
-  foreach ($Type in $addedtypes) {
+  foreach ($Type in $typestoExport) {
     $TypeAcceleratorsClass::Remove($Type.FullName)
   }
 }.GetNewClosure();
 
-#endregion typeAccelerators
+$scripts = @();
+$Public = Get-ChildItem "$PSScriptRoot/Public" -Filter "*.ps1" -Recurse -ErrorAction SilentlyContinue
+$scripts += Get-ChildItem "$PSScriptRoot/Private" -Filter "*.ps1" -Recurse -ErrorAction SilentlyContinue
+$scripts += $Public
 
-$Private = Get-ChildItem ([IO.Path]::Combine($PSScriptRoot, 'Private')) -Filter "*.ps1" -ErrorAction SilentlyContinue
-$Public = Get-ChildItem ([IO.Path]::Combine($PSScriptRoot, 'Public')) -Filter "*.ps1" -ErrorAction SilentlyContinue
-foreach ($file in ($Public + $Private)) {
+foreach ($file in $scripts) {
   Try {
     if ([string]::IsNullOrWhiteSpace($file.fullname)) { continue }
     . "$($file.fullname)"
@@ -170,8 +185,7 @@ foreach ($file in ($Public + $Private)) {
 
 $Param = @{
   Function = $Public.BaseName
-  Variable = 'localizedData'
-  Cmdlet   = "*"
-  Alias    = "*"
+  Cmdlet   = '*'
+  Alias    = '*'
 }
-Export-ModuleMember @Param -Verbose
+Export-ModuleMember @Param -Verbose:$false
