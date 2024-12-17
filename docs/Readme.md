@@ -77,40 +77,10 @@ module.</summary>
 
 ⤷ **Run the build script and tests.**
 
-set the following as your `build.ps1` script
+run
 
 ```PowerShell
-[cmdletbinding(DefaultParameterSetName = 'task')]
-param(
-  [parameter(Position = 0, ParameterSetName = 'task')]
-  [ValidateScript({
-      $task_seq = [string[]]$_; $IsValid = $true
-      $Tasks = @('Init', 'Clean', 'Compile', 'Import', 'Test', 'Deploy')
-      foreach ($name in $task_seq) {
-        $IsValid = $IsValid -and ($name -in $Tasks)
-      }
-      if ($IsValid) {
-        return $true
-      } else {
-        throw [System.ArgumentException]::new('Task', "ValidSet: $($Tasks -join ', ').")
-      }
-    }
-  )][ValidateNotNullOrEmpty()]
-  [string[]]$Task = @('Init', 'Clean', 'Compile', 'Import'),
-
-  [parameter(ParameterSetName = 'help')]
-  [Alias('-Help')]
-  [switch]$Help
-)
-
-Import-Module cliHelper.env
-Build-Module -Task $Task
-```
-
-then run
-
-```PowerShell
-build.ps1 -Task test
+./build.ps1 -Task test
 ```
 
 If tests (Intergration, Freature and module tests) pass, then create your pull
@@ -141,6 +111,7 @@ Remember to follow the contribution guidelines.
 
 ## contribution guidelines
 
-- No long names. ex:
+- No long names. ex: ex:
   `Get-MgEntitlementManagementResourceRequestCatalogResourceScopeResourceRoleResourceEnvironment`
-  from `Microsoft.Graph.Identity.Governance` 2.23.0
+
+  (from `Microsoft.Graph.Identity.Governance` 2.23.0)

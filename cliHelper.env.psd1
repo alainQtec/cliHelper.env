@@ -33,7 +33,9 @@
   FunctionsToExport     = @(
     '<FunctionsToExport>'
   )
-  RequiredModules       = @()
+  RequiredModules       = @(
+    'clihelper.xcrypt'
+  )
   CmdletsToExport       = '*'
   VariablesToExport     = '*'
   AliasesToExport       = '*'
