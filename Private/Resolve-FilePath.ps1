@@ -17,7 +17,7 @@
   # .NOTES
   #     Created to work with the "ModuleX" module. (Its not tested for other use cases)
   #     TopLevel directory search takes Priority.
-  #         eg: Resolve-FilePath ModuleX.ps1 will return ./.env instead of ./BuildOutput/module/0.1.1/.env
+  #         eg: Resolve-FilePath ModuleX.ps1 will return ./.env instead of ./BuildOutput/module/0.1.2/.env
   #             Unless ./.env doesn't exist; In that case it will Recursively search for other Names in the repo.
   # .LINK
   #     https://github.com/alainQtec/cliHelper.env/blob/main/Private/Resolve-FilePath.ps1

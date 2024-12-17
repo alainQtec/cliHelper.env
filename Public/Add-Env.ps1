@@ -46,7 +46,7 @@ function Add-Env {
   begin {
     [System.Management.Automation.ActionPreference]$eap = $ErrorActionPreference; $ErrorActionPreference = "SilentlyContinue"
     [System.Management.Automation.ActionPreference]$Ifp = $InformationPreference; $InformationPreference = "Continue"
-    if ([dotEnv]::GetHostOs() -eq "Windows" -and ![dotEnv]::IsAdmin()) {
+    if ([xcrypt]::Get_Host_Os() -eq "Windows" -and ![dotEnv]::IsAdmin()) {
       Write-Warning "$fxn [!]  It seems You're not Admin"
       # exit
     }

@@ -611,7 +611,7 @@ class dotEnv {
     $isAdmn = switch ($hostOS) {
       "Windows" { (New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator); break }
       "Linux" { (& id -u) -eq 0; break }
-      "MacOsx" { Write-Warning "MacOsx !! idk how to solve this one!"; $false; break }
+      "MacOsx" { Write-Warning "MacOsx !! idk how to solve this one! (wip)"; $false; break }
       Default {
         throw "UNSUPPORTED_OS"
       }
